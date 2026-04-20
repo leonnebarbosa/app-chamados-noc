@@ -1,0 +1,87 @@
+version: "3.8"
+
+services:
+  # =================================
+  # Aplicação Next.js
+  # =================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: noc-chamados-app
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://noc_user:noc_password@db:5432/noc_chamados?schema=public
+      - JWT_SECRET=${JWT_SECRET:-sua-chave-secreta-forte-minimo-32-caracteres}
+      - NODE_ENV=production
+      - APP_NAME=NOC Chamados
+    ports:
+      - "3000:3000"
+    volumes:
+      - uploads_data:/app/public/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+    labels:
+      # Habilitar Traefik
+      - "traefik.enable=true"
+      
+      # Roteamento HTTP
+      - "traefik.http.routers.noc-chamados.rule=Host(`chamados.xmov.com.br`)"
+      - "traefik.http.routers.noc-chamados.entrypoints=websecure"
+      - "traefik.http.routers.noc-chamados.tls=true"
+      - "traefik.http.routers.noc-chamados.tls.certresolver=letsencrypt"
+      
+      # Serviço
+      - "traefik.http.services.noc-chamados.loadbalancer.server.port=3000"
+      
+      # Middleware de segurança
+      - "traefik.http.routers.noc-chamados.middlewares=secure-headers@docker"
+      - "traefik.http.middlewares.secure-headers.headers.frameDeny=true"
+      - "traefik.http.middlewares.secure-headers.headers.sslRedirect=true"
+      - "traefik.http.middlewares.secure-headers.headers.browserXssFilter=true"
+      - "traefik.http.middlewares.secure-headers.headers.contentTypeNosniff=true"
+
+  # =================================
+  # Banco de Dados PostgreSQL
+  # =================================
+  db:
+    image: postgres:16-alpine
+    container_name: noc-chamados-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=noc_user
+      - POSTGRES_PASSWORD=noc_password
+      - POSTGRES_DB=noc_chamados
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U noc_user -d noc_chamados"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+# =================================
+# Volumes
+# =================================
+volumes:
+  postgres_data:
+    driver: local
+  uploads_data:
+    driver: local
+
+# =================================
+# Redes
+# =================================
+networks:
+  # Rede do Traefik
+  netMov:
+    external: true
+  
+  # Rede interna (app <-> db)
+  internal:
+    driver: bridge

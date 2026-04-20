@@ -1,0 +1,947 @@
+{
+  "info": {
+    "name": "NOC Chamados API",
+    "description": "Coleção completa da API do sistema NOC Chamados v1.1.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.1.0"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://seu-dominio.com/api",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "noauth"
+  },
+  "item": [
+    {
+      "name": "🔐 Autenticação",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    pm.test(\"Login bem-sucedido\", function () {",
+                  "        pm.response.to.have.status(200);",
+                  "        var jsonData = pm.response.json();",
+                  "        pm.expect(jsonData.success).to.eql(true);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@xmov.com.br\",\n  \"senha\": \"Admin@123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "logout"]
+            }
+          }
+        },
+        {
+          "name": "Usuário Atual (Me)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "me"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🎫 Chamados",
+      "item": [
+        {
+          "name": "Listar Chamados",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/chamados?status=todos&impacto=todos",
+              "host": ["{{baseUrl}}"],
+              "path": ["chamados"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "todos"
+                },
+                {
+                  "key": "impacto",
+                  "value": "todos"
+                },
+                {
+                  "key": "operadoraId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "popId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "busca",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Criar Chamado (Link)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tipoChamado\": \"link\",\n  \"linkId\": 1,\n  \"tipoFalhaId\": 1,\n  \"dataDeteccao\": \"{{$isoTimestamp}}\",\n  \"impacto\": \"critico\",\n  \"descricaoProblema\": \"Link fora do ar\",\n  \"protocoloOperadora\": \"INC123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chamados",
+              "host": ["{{baseUrl}}"],
+              "path": ["chamados"]
+            }
+          }
+        },
+        {
+          "name": "Criar Chamado (Transporte)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tipoChamado\": \"transporte\",\n  \"transporteId\": 1,\n  \"tipoFalhaId\": 1,\n  \"dataDeteccao\": \"{{$isoTimestamp}}\",\n  \"impacto\": \"alto\",\n  \"descricaoProblema\": \"Perda de pacotes no transporte\",\n  \"protocoloOperadora\": \"INC789012\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chamados",
+              "host": ["{{baseUrl}}"],
+              "path": ["chamados"]
+            }
+          }
+        },
+        {
+          "name": "Obter Chamado",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/chamados/:id",
+              "host": ["{{baseUrl}}"],
+              "path": ["chamados", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Atualizar Chamado",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"em_atendimento\",\n  \"protocoloOperadora\": \"INC123456-UPD\",\n  \"descricao\": \"Status atualizado para em atendimento\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chamados/:id",
+              "host": ["{{baseUrl}}"],
+              "path": ["chamados", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Fechar Chamado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dataResolucao\": \"{{$isoTimestamp}}\",\n  \"semConfirmacaoOperadora\": false,\n  \"observacao\": \"Serviço normalizado\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chamados/:id/fechar",
+              "host": ["{{baseUrl}}"],
+              "path": ["chamados", ":id", "fechar"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Deletar Chamado (Supervisor)",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/chamados/:id",
+              "host": ["{{baseUrl}}"],
+              "path": ["chamados", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Histórico do Chamado",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/chamados/:id/historico",
+              "host": ["{{baseUrl}}"],
+              "path": ["chamados", ":id", "historico"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Alertas",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/chamados/alertas",
+              "host": ["{{baseUrl}}"],
+              "path": ["chamados", "alertas"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "⏱️ Períodos de Impacto",
+      "item": [
+        {
+          "name": "Listar Períodos",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/chamados/:id/periodos-impacto",
+              "host": ["{{baseUrl}}"],
+              "path": ["chamados", ":id", "periodos-impacto"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Criar Período",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"inicio\": \"2025-12-15T12:00:00.000Z\",\n  \"fim\": \"2025-12-15T14:00:00.000Z\",\n  \"descricao\": \"Horário de pico\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chamados/:id/periodos-impacto",
+              "host": ["{{baseUrl}}"],
+              "path": ["chamados", ":id", "periodos-impacto"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Atualizar Período",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"inicio\": \"2025-12-15T12:00:00.000Z\",\n  \"fim\": \"2025-12-15T15:00:00.000Z\",\n  \"descricao\": \"Horário de pico (atualizado)\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chamados/:id/periodos-impacto/:periodoId",
+              "host": ["{{baseUrl}}"],
+              "path": ["chamados", ":id", "periodos-impacto", ":periodoId"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                },
+                {
+                  "key": "periodoId",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Deletar Período",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/chamados/:id/periodos-impacto/:periodoId",
+              "host": ["{{baseUrl}}"],
+              "path": ["chamados", ":id", "periodos-impacto", ":periodoId"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                },
+                {
+                  "key": "periodoId",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🔗 Links",
+      "item": [
+        {
+          "name": "Listar Links",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/links?ativo=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["links"],
+              "query": [
+                {
+                  "key": "ativo",
+                  "value": "true"
+                },
+                {
+                  "key": "operadoraId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "popId",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Criar Link",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"designador\": \"LINK-001\",\n  \"operadoraId\": 1,\n  \"popId\": 1,\n  \"transporteId\": 1,\n  \"tipoServico\": \"LINK IP\",\n  \"capacidade\": \"10G\",\n  \"diaVencimento\": 25,\n  \"enderecoPontaA\": \"Endereço Ponta A\",\n  \"enderecoPontaB\": \"Endereço Ponta B\",\n  \"observacoes\": \"Observações do link\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/links",
+              "host": ["{{baseUrl}}"],
+              "path": ["links"]
+            }
+          }
+        },
+        {
+          "name": "Obter Link",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/links/:id",
+              "host": ["{{baseUrl}}"],
+              "path": ["links", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Atualizar Link",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"designador\": \"LINK-001-UPD\",\n  \"diaVencimento\": 30,\n  \"observacoes\": \"Observações atualizadas\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/links/:id",
+              "host": ["{{baseUrl}}"],
+              "path": ["links", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Deletar Link (Supervisor)",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/links/:id",
+              "host": ["{{baseUrl}}"],
+              "path": ["links", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🚇 Transportes",
+      "item": [
+        {
+          "name": "Listar Transportes",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/transportes?ativo=true&includeLinks=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["transportes"],
+              "query": [
+                {
+                  "key": "ativo",
+                  "value": "true"
+                },
+                {
+                  "key": "includeLinks",
+                  "value": "true"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Criar Transporte",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"TRANSPORTE-001\",\n  \"fornecedor\": \"Fornecedor A\",\n  \"origem\": \"São Paulo\",\n  \"destino\": \"Rio de Janeiro\",\n  \"observacoes\": \"Observações do transporte\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transportes",
+              "host": ["{{baseUrl}}"],
+              "path": ["transportes"]
+            }
+          }
+        },
+        {
+          "name": "Obter Transporte",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/transportes/:id",
+              "host": ["{{baseUrl}}"],
+              "path": ["transportes", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Links do Transporte",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/transportes/:id/links",
+              "host": ["{{baseUrl}}"],
+              "path": ["transportes", ":id", "links"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🏢 Operadoras",
+      "item": [
+        {
+          "name": "Listar Operadoras",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/operadoras?ativo=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["operadoras"],
+              "query": [
+                {
+                  "key": "ativo",
+                  "value": "true"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Criar Operadora",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Operadora Teste\",\n  \"telefoneSuporte\": \"+55 11 1234-5678\",\n  \"emailSuporte\": \"suporte@operadora.com\",\n  \"portalUrl\": \"https://portal.operadora.com\",\n  \"slaHoras\": 4,\n  \"observacoes\": \"Observações da operadora\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/operadoras",
+              "host": ["{{baseUrl}}"],
+              "path": ["operadoras"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "📍 POPs",
+      "item": [
+        {
+          "name": "Listar POPs",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/pops?ativo=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["pops"],
+              "query": [
+                {
+                  "key": "ativo",
+                  "value": "true"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Criar POP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codigo\": \"SP01\",\n  \"nome\": \"POP São Paulo\",\n  \"cidade\": \"São Paulo\",\n  \"estado\": \"SP\",\n  \"endereco\": \"Rua Exemplo, 123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/pops",
+              "host": ["{{baseUrl}}"],
+              "path": ["pops"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "👥 Usuários",
+      "item": [
+        {
+          "name": "Listar Usuários",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/usuarios?inativos=false",
+              "host": ["{{baseUrl}}"],
+              "path": ["usuarios"],
+              "query": [
+                {
+                  "key": "inativos",
+                  "value": "false"
+                },
+                {
+                  "key": "busca",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Criar Usuário",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Novo Usuário\",\n  \"email\": \"novo@xmov.com.br\",\n  \"senha\": \"Senha@123\",\n  \"perfil\": \"operador\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/usuarios",
+              "host": ["{{baseUrl}}"],
+              "path": ["usuarios"]
+            }
+          }
+        },
+        {
+          "name": "Trocar Senha",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"senhaAtual\": \"SenhaAntiga@123\",\n  \"novaSenha\": \"SenhaNova@456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/usuarios/:id/trocar-senha",
+              "host": ["{{baseUrl}}"],
+              "path": ["usuarios", ":id", "trocar-senha"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🏷️ Tipos de Falha",
+      "item": [
+        {
+          "name": "Listar Tipos de Falha",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/tipos-falha",
+              "host": ["{{baseUrl}}"],
+              "path": ["tipos-falha"]
+            }
+          }
+        },
+        {
+          "name": "Criar Tipo de Falha",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Fibra Rompida\",\n  \"descricao\": \"Cabo de fibra óptica rompido\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tipos-falha",
+              "host": ["{{baseUrl}}"],
+              "path": ["tipos-falha"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "📊 Relatórios",
+      "item": [
+        {
+          "name": "Resumo Geral",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/relatorios?tipo=resumo&dataInicio=2025-01-01&dataFim=2025-12-31",
+              "host": ["{{baseUrl}}"],
+              "path": ["relatorios"],
+              "query": [
+                {
+                  "key": "tipo",
+                  "value": "resumo"
+                },
+                {
+                  "key": "dataInicio",
+                  "value": "2025-01-01"
+                },
+                {
+                  "key": "dataFim",
+                  "value": "2025-12-31"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "KPIs Completos",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/relatorios?tipo=kpis&dataInicio=2025-01-01&dataFim=2025-12-31",
+              "host": ["{{baseUrl}}"],
+              "path": ["relatorios"],
+              "query": [
+                {
+                  "key": "tipo",
+                  "value": "kpis"
+                },
+                {
+                  "key": "dataInicio",
+                  "value": "2025-01-01"
+                },
+                {
+                  "key": "dataFim",
+                  "value": "2025-12-31"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Performance por Operadora",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/relatorios?tipo=operadoras&dataInicio=2025-01-01&dataFim=2025-12-31",
+              "host": ["{{baseUrl}}"],
+              "path": ["relatorios"],
+              "query": [
+                {
+                  "key": "tipo",
+                  "value": "operadoras"
+                },
+                {
+                  "key": "dataInicio",
+                  "value": "2025-01-01"
+                },
+                {
+                  "key": "dataFim",
+                  "value": "2025-12-31"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Incidentes por POP",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/relatorios?tipo=pops",
+              "host": ["{{baseUrl}}"],
+              "path": ["relatorios"],
+              "query": [
+                {
+                  "key": "tipo",
+                  "value": "pops"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Tendência Mensal",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/relatorios?tipo=mensal",
+              "host": ["{{baseUrl}}"],
+              "path": ["relatorios"],
+              "query": [
+                {
+                  "key": "tipo",
+                  "value": "mensal"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Links Mais Problemáticos",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/relatorios?tipo=linksProblematicos&dataInicio=2025-01-01&dataFim=2025-12-31",
+              "host": ["{{baseUrl}}"],
+              "path": ["relatorios"],
+              "query": [
+                {
+                  "key": "tipo",
+                  "value": "linksProblematicos"
+                },
+                {
+                  "key": "dataInicio",
+                  "value": "2025-01-01"
+                },
+                {
+                  "key": "dataFim",
+                  "value": "2025-12-31"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Relatório por Link",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/relatorios?tipo=relatorioLink&linkId=1&dataInicio=2025-01-01&dataFim=2025-12-31",
+              "host": ["{{baseUrl}}"],
+              "path": ["relatorios"],
+              "query": [
+                {
+                  "key": "tipo",
+                  "value": "relatorioLink"
+                },
+                {
+                  "key": "linkId",
+                  "value": "1"
+                },
+                {
+                  "key": "dataInicio",
+                  "value": "2025-01-01"
+                },
+                {
+                  "key": "dataFim",
+                  "value": "2025-12-31"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
+
+

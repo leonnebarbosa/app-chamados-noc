@@ -1,0 +1,2207 @@
+openapi: 3.0.3
+info:
+  title: NOC Chamados API
+  description: |
+    API REST para sistema de gestão de chamados de NOC (Network Operations Center).
+    
+    ## Autenticação
+    A API usa autenticação JWT via HTTPOnly Cookie. Faça login primeiro usando `/auth/login`.
+    
+    ## Rate Limiting
+    - Login: 5 tentativas por 15 minutos (por IP)
+    
+    ## Recursos
+    - [Documentação Interativa](/api-docs)
+    - [Guia Swagger](./SWAGGER_GUIDE.md)
+    - [Coleção Postman](./NOC_Chamados.postman_collection.json)
+    
+  version: 1.2.3
+  contact:
+    name: Suporte NOC Chamados
+  license:
+    name: Proprietário
+
+servers:
+  - url: https://chamados.xmov.com.br/api
+    description: Produção
+  - url: http://localhost:3000/api
+    description: Desenvolvimento Local
+
+tags:
+  - name: Autenticação
+    description: Endpoints de autenticação e autorização
+  - name: Chamados
+    description: Gestão de chamados (tickets)
+  - name: Períodos de Impacto
+    description: Registro de períodos de impacto em chamados
+  - name: Anexos
+    description: Upload e gestão de anexos
+  - name: Links
+    description: Gestão de links de rede
+  - name: Transportes
+    description: Gestão de transportes
+  - name: Operadoras
+    description: Gestão de operadoras
+  - name: POPs
+    description: Gestão de POPs (Pontos de Presença)
+  - name: Usuários
+    description: Gestão de usuários (apenas supervisores)
+  - name: Tipos de Falha
+    description: Gestão de tipos de falha
+  - name: Relatórios
+    description: Geração de relatórios e KPIs
+
+paths:
+  # ==============================================
+  # AUTENTICAÇÃO
+  # ==============================================
+  /auth/login:
+    post:
+      tags:
+        - Autenticação
+      summary: Login
+      description: |
+        Autentica um usuário e retorna um token JWT em cookie HTTPOnly.
+        
+        **Rate Limit:** 5 tentativas por 15 minutos (por IP)
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - senha
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: admin@xmov.com.br
+                senha:
+                  type: string
+                  format: password
+                  minLength: 8
+                  example: Admin@123
+      responses:
+        '200':
+          description: Login bem-sucedido
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+                example: token=eyJhbGc...; HttpOnly; Secure; SameSite=Strict
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  nome:
+                    type: string
+                    example: Administrador
+                  perfil:
+                    type: string
+                    enum: [operador, supervisor]
+                    example: supervisor
+        '401':
+          description: Email ou senha incorretos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Muitas tentativas de login
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                example: 900
+            X-RateLimit-Limit:
+              schema:
+                type: integer
+                example: 5
+            X-RateLimit-Remaining:
+              schema:
+                type: integer
+                example: 0
+            X-RateLimit-Reset:
+              schema:
+                type: string
+                format: date-time
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/logout:
+    post:
+      tags:
+        - Autenticação
+      summary: Logout
+      description: Remove o token de autenticação
+      operationId: logout
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Logout bem-sucedido
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+
+  /auth/me:
+    get:
+      tags:
+        - Autenticação
+      summary: Usuário Atual
+      description: Retorna informações do usuário autenticado
+      operationId: getCurrentUser
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Informações do usuário
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsuarioLogado'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ==============================================
+  # CHAMADOS
+  # ==============================================
+  /chamados:
+    get:
+      tags:
+        - Chamados
+      summary: Listar Chamados
+      description: Lista todos os chamados com filtros opcionais
+      operationId: listarChamados
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: Filtrar por status
+          schema:
+            type: string
+            enum: [aberto, em_atendimento, aguardando_operadora, fechado, todos]
+            default: todos
+        - name: impacto
+          in: query
+          description: Filtrar por impacto
+          schema:
+            type: string
+            enum: [critico, alto, medio, baixo, todos]
+            default: todos
+        - name: operadoraId
+          in: query
+          description: Filtrar por operadora
+          schema:
+            type: integer
+            example: 1
+        - name: popId
+          in: query
+          description: Filtrar por POP
+          schema:
+            type: integer
+            example: 1
+        - name: busca
+          in: query
+          description: Termo de busca (multi-campo com AND)
+          schema:
+            type: string
+            example: link fora
+      responses:
+        '200':
+          description: Lista de chamados
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Chamado'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags:
+        - Chamados
+      summary: Criar Chamado
+      description: Cria um novo chamado
+      operationId: criarChamado
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/CriarChamadoLink'
+                - $ref: '#/components/schemas/CriarChamadoTransporte'
+      responses:
+        '201':
+          description: Chamado criado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Chamado'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /chamados/{id}:
+    get:
+      tags:
+        - Chamados
+      summary: Obter Chamado
+      description: Retorna detalhes de um chamado específico
+      operationId: obterChamado
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID do chamado
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Detalhes do chamado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChamadoDetalhado'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags:
+        - Chamados
+      summary: Atualizar Chamado
+      description: Atualiza informações de um chamado
+      operationId: atualizarChamado
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AtualizarChamado'
+      responses:
+        '200':
+          description: Chamado atualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Chamado'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - Chamados
+      summary: Deletar Chamado
+      description: Exclui permanentemente um chamado (apenas supervisores)
+      operationId: deletarChamado
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Chamado excluído
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Chamado excluído com sucesso
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /chamados/{id}/fechar:
+    post:
+      tags:
+        - Chamados
+      summary: Fechar Chamado
+      description: Fecha um chamado com informações de resolução
+      operationId: fecharChamado
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FecharChamado'
+      responses:
+        '200':
+          description: Chamado fechado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Chamado'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /chamados/{id}/historico:
+    get:
+      tags:
+        - Chamados
+      summary: Histórico do Chamado
+      description: Lista o histórico de um chamado
+      operationId: obterHistoricoChamado
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Histórico do chamado
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChamadoHistorico'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /chamados/alertas:
+    get:
+      tags:
+        - Chamados
+      summary: Alertas de Chamados
+      description: Lista chamados que requerem atenção
+      operationId: listarAlertas
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Lista de alertas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Alerta'
+
+  # ==============================================
+  # PERÍODOS DE IMPACTO
+  # ==============================================
+  /chamados/{id}/periodos-impacto:
+    get:
+      tags:
+        - Períodos de Impacto
+      summary: Listar Períodos
+      description: Lista períodos de impacto de um chamado
+      operationId: listarPeriodosImpacto
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Lista de períodos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PeriodoImpacto'
+
+    post:
+      tags:
+        - Períodos de Impacto
+      summary: Criar Período
+      description: Adiciona um período de impacto ao chamado
+      operationId: criarPeriodoImpacto
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CriarPeriodoImpacto'
+      responses:
+        '201':
+          description: Período criado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeriodoImpacto'
+
+  /chamados/{id}/periodos-impacto/{periodoId}:
+    put:
+      tags:
+        - Períodos de Impacto
+      summary: Atualizar Período
+      description: Atualiza um período de impacto
+      operationId: atualizarPeriodoImpacto
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: periodoId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CriarPeriodoImpacto'
+      responses:
+        '200':
+          description: Período atualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeriodoImpacto'
+
+    delete:
+      tags:
+        - Períodos de Impacto
+      summary: Deletar Período
+      description: Remove um período de impacto
+      operationId: deletarPeriodoImpacto
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: periodoId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Período deletado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+
+  # ==============================================
+  # ANEXOS
+  # ==============================================
+  /chamados/{id}/anexos:
+    get:
+      tags:
+        - Anexos
+      summary: Listar Anexos
+      description: Lista anexos de um chamado
+      operationId: listarAnexos
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Lista de anexos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Anexo'
+
+    post:
+      tags:
+        - Anexos
+      summary: Upload de Anexo
+      description: |
+        Faz upload de um anexo para o chamado.
+        
+        **Tipos permitidos:** JPEG, PNG, GIF, WebP, PDF, TXT, CSV, DOC, DOCX, XLS, XLSX
+        
+        **Tamanho máximo:** 10MB
+      operationId: uploadAnexo
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Anexo criado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Anexo'
+
+  /chamados/{id}/anexos/{anexoId}:
+    delete:
+      tags:
+        - Anexos
+      summary: Deletar Anexo
+      description: Remove um anexo
+      operationId: deletarAnexo
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: anexoId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Anexo deletado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+
+  # ==============================================
+  # LINKS
+  # ==============================================
+  /links:
+    get:
+      tags:
+        - Links
+      summary: Listar Links
+      description: Lista todos os links com filtros opcionais
+      operationId: listarLinks
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: ativo
+          in: query
+          schema:
+            type: boolean
+        - name: operadoraId
+          in: query
+          schema:
+            type: integer
+        - name: popId
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Lista de links
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Link'
+
+    post:
+      tags:
+        - Links
+      summary: Criar Link
+      description: Cria um novo link
+      operationId: criarLink
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CriarLink'
+      responses:
+        '201':
+          description: Link criado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Link'
+
+  /links/{id}:
+    get:
+      tags:
+        - Links
+      summary: Obter Link
+      operationId: obterLink
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Detalhes do link
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Link'
+
+    put:
+      tags:
+        - Links
+      summary: Atualizar Link
+      operationId: atualizarLink
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CriarLink'
+      responses:
+        '200':
+          description: Link atualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Link'
+
+    delete:
+      tags:
+        - Links
+      summary: Deletar Link
+      description: Exclui permanentemente um link arquivado (apenas supervisores)
+      operationId: deletarLink
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Link deletado
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ==============================================
+  # TRANSPORTES
+  # ==============================================
+  /transportes:
+    get:
+      tags:
+        - Transportes
+      summary: Listar Transportes
+      operationId: listarTransportes
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: ativo
+          in: query
+          schema:
+            type: boolean
+        - name: includeLinks
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Lista de transportes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Transporte'
+
+    post:
+      tags:
+        - Transportes
+      summary: Criar Transporte
+      operationId: criarTransporte
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CriarTransporte'
+      responses:
+        '201':
+          description: Transporte criado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transporte'
+
+  /transportes/{id}:
+    get:
+      tags:
+        - Transportes
+      summary: Obter Transporte
+      operationId: obterTransporte
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Detalhes do transporte
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transporte'
+
+    put:
+      tags:
+        - Transportes
+      summary: Atualizar Transporte
+      operationId: atualizarTransporte
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CriarTransporte'
+      responses:
+        '200':
+          description: Transporte atualizado
+
+    delete:
+      tags:
+        - Transportes
+      summary: Deletar Transporte
+      operationId: deletarTransporte
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Transporte deletado
+
+  /transportes/{id}/links:
+    get:
+      tags:
+        - Transportes
+      summary: Links do Transporte
+      description: Lista links vinculados a um transporte
+      operationId: listarLinksTransporte
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Lista de links
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Link'
+
+  # ==============================================
+  # OPERADORAS
+  # ==============================================
+  /operadoras:
+    get:
+      tags:
+        - Operadoras
+      summary: Listar Operadoras
+      operationId: listarOperadoras
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: ativo
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Lista de operadoras
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Operadora'
+
+    post:
+      tags:
+        - Operadoras
+      summary: Criar Operadora
+      operationId: criarOperadora
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CriarOperadora'
+      responses:
+        '201':
+          description: Operadora criada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operadora'
+
+  /operadoras/{id}:
+    get:
+      tags:
+        - Operadoras
+      summary: Obter Operadora
+      operationId: obterOperadora
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Detalhes da operadora
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operadora'
+
+    put:
+      tags:
+        - Operadoras
+      summary: Atualizar Operadora
+      operationId: atualizarOperadora
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CriarOperadora'
+      responses:
+        '200':
+          description: Operadora atualizada
+
+    delete:
+      tags:
+        - Operadoras
+      summary: Deletar Operadora
+      operationId: deletarOperadora
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Operadora deletada
+
+  # ==============================================
+  # POPs
+  # ==============================================
+  /pops:
+    get:
+      tags:
+        - POPs
+      summary: Listar POPs
+      operationId: listarPops
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: ativo
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Lista de POPs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Pop'
+
+    post:
+      tags:
+        - POPs
+      summary: Criar POP
+      operationId: criarPop
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CriarPop'
+      responses:
+        '201':
+          description: POP criado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pop'
+
+  /pops/{id}:
+    get:
+      tags:
+        - POPs
+      summary: Obter POP
+      operationId: obterPop
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Detalhes do POP
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pop'
+
+    put:
+      tags:
+        - POPs
+      summary: Atualizar POP
+      operationId: atualizarPop
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CriarPop'
+      responses:
+        '200':
+          description: POP atualizado
+
+    delete:
+      tags:
+        - POPs
+      summary: Deletar POP
+      operationId: deletarPop
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: POP deletado
+
+  # ==============================================
+  # USUÁRIOS
+  # ==============================================
+  /usuarios:
+    get:
+      tags:
+        - Usuários
+      summary: Listar Usuários
+      description: Lista usuários (apenas supervisores)
+      operationId: listarUsuarios
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: busca
+          in: query
+          schema:
+            type: string
+        - name: inativos
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Lista de usuários
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Usuario'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags:
+        - Usuários
+      summary: Criar Usuário
+      description: Cria um novo usuário (apenas supervisores)
+      operationId: criarUsuario
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CriarUsuario'
+      responses:
+        '201':
+          description: Usuário criado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Usuario'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /usuarios/{id}:
+    get:
+      tags:
+        - Usuários
+      summary: Obter Usuário
+      operationId: obterUsuario
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Detalhes do usuário
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Usuario'
+
+    put:
+      tags:
+        - Usuários
+      summary: Atualizar Usuário
+      operationId: atualizarUsuario
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AtualizarUsuario'
+      responses:
+        '200':
+          description: Usuário atualizado
+
+    delete:
+      tags:
+        - Usuários
+      summary: Deletar Usuário
+      description: Deleta um usuário (hard delete se sem chamados, soft delete se tiver)
+      operationId: deletarUsuario
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Usuário deletado
+
+  /usuarios/{id}/trocar-senha:
+    post:
+      tags:
+        - Usuários
+      summary: Trocar Senha
+      description: Troca a senha do usuário (apenas própria senha)
+      operationId: trocarSenha
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - senhaAtual
+                - novaSenha
+              properties:
+                senhaAtual:
+                  type: string
+                  format: password
+                  example: SenhaAntiga@123
+                novaSenha:
+                  type: string
+                  format: password
+                  minLength: 8
+                  example: SenhaNova@456
+      responses:
+        '200':
+          description: Senha alterada
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ==============================================
+  # TIPOS DE FALHA
+  # ==============================================
+  /tipos-falha:
+    get:
+      tags:
+        - Tipos de Falha
+      summary: Listar Tipos de Falha
+      operationId: listarTiposFalha
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Lista de tipos de falha
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TipoFalha'
+
+    post:
+      tags:
+        - Tipos de Falha
+      summary: Criar Tipo de Falha
+      operationId: criarTipoFalha
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - nome
+              properties:
+                nome:
+                  type: string
+                  example: Fibra Rompida
+                descricao:
+                  type: string
+                  example: Cabo de fibra óptica rompido
+      responses:
+        '201':
+          description: Tipo de falha criado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TipoFalha'
+
+  # ==============================================
+  # RELATÓRIOS
+  # ==============================================
+  /relatorios:
+    get:
+      tags:
+        - Relatórios
+      summary: Obter Relatório
+      description: |
+        Gera relatórios e KPIs baseado no tipo especificado.
+        
+        **Tipos disponíveis:**
+        - `resumo` - Resumo geral
+        - `kpis` - KPIs completos (MTTR, MTTI, Disponibilidade)
+        - `operadoras` - Performance por operadora
+        - `pops` - Incidentes por POP
+        - `mensal` - Tendência mensal
+        - `tiposFalha` - Incidentes por tipo de falha
+        - `linksProblematicos` - Links mais problemáticos
+        - `relatorioLink` - Relatório de link específico (requer `linkId`)
+      operationId: obterRelatorio
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: tipo
+          in: query
+          required: true
+          schema:
+            type: string
+            enum:
+              - resumo
+              - kpis
+              - operadoras
+              - pops
+              - mensal
+              - tiposFalha
+              - linksProblematicos
+              - relatorioLink
+          example: kpis
+        - name: dataInicio
+          in: query
+          schema:
+            type: string
+            format: date
+            example: '2025-01-01'
+        - name: dataFim
+          in: query
+          schema:
+            type: string
+            format: date
+            example: '2025-12-31'
+        - name: linkId
+          in: query
+          description: Obrigatório para tipo 'relatorioLink'
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Relatório gerado
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ResumoGeral'
+                  - $ref: '#/components/schemas/KPIs'
+                  - $ref: '#/components/schemas/PerformanceOperadoras'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+# ==============================================
+# COMPONENTS
+# ==============================================
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: token
+      description: JWT token armazenado em HTTPOnly cookie
+
+  responses:
+    Unauthorized:
+      description: Não autenticado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: Não autorizado
+
+    Forbidden:
+      description: Sem permissão
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: Acesso negado
+
+    BadRequest:
+      description: Dados inválidos
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: Dados inválidos
+
+    NotFound:
+      description: Recurso não encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: Recurso não encontrado
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: Mensagem de erro
+
+    UsuarioLogado:
+      type: object
+      properties:
+        userId:
+          type: integer
+          example: 1
+        email:
+          type: string
+          format: email
+          example: usuario@xmov.com.br
+        nome:
+          type: string
+          example: João Silva
+        perfil:
+          type: string
+          enum: [operador, supervisor]
+          example: operador
+
+    Chamado:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        numero:
+          type: string
+          example: '2025.12345'
+        status:
+          type: string
+          enum: [aberto, em_atendimento, aguardando_operadora, fechado]
+          example: aberto
+        impacto:
+          type: string
+          enum: [critico, alto, medio, baixo]
+          example: critico
+        tipoChamado:
+          type: string
+          enum: [link, transporte]
+          example: link
+        descricaoProblema:
+          type: string
+          example: Link fora do ar
+        protocoloOperadora:
+          type: string
+          nullable: true
+          example: INC123456
+        dataDeteccao:
+          type: string
+          format: date-time
+          example: '2025-12-15T10:00:00.000Z'
+        dataAbertura:
+          type: string
+          format: date-time
+          example: '2025-12-15T10:05:00.000Z'
+        dataNormalizacao:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2025-12-15T14:30:00.000Z'
+        dataFechamento:
+          type: string
+          format: date-time
+          nullable: true
+        link:
+          $ref: '#/components/schemas/Link'
+          nullable: true
+        transporte:
+          $ref: '#/components/schemas/Transporte'
+          nullable: true
+        tipoFalha:
+          $ref: '#/components/schemas/TipoFalha'
+        abertoPor:
+          $ref: '#/components/schemas/UsuarioSimples'
+        fechadoPor:
+          $ref: '#/components/schemas/UsuarioSimples'
+          nullable: true
+
+    ChamadoDetalhado:
+      allOf:
+        - $ref: '#/components/schemas/Chamado'
+        - type: object
+          properties:
+            periodosImpacto:
+              type: array
+              items:
+                $ref: '#/components/schemas/PeriodoImpacto'
+
+    CriarChamadoLink:
+      type: object
+      required:
+        - tipoChamado
+        - linkId
+        - tipoFalhaId
+        - dataDeteccao
+        - impacto
+        - descricaoProblema
+      properties:
+        tipoChamado:
+          type: string
+          enum: [link]
+        linkId:
+          type: integer
+          example: 1
+        tipoFalhaId:
+          type: integer
+          example: 1
+        dataDeteccao:
+          type: string
+          format: date-time
+          example: '2025-12-15T10:00:00.000Z'
+        impacto:
+          type: string
+          enum: [critico, alto, medio, baixo]
+          example: critico
+        descricaoProblema:
+          type: string
+          example: Link fora do ar
+        protocoloOperadora:
+          type: string
+          example: INC123456
+
+    CriarChamadoTransporte:
+      type: object
+      required:
+        - tipoChamado
+        - transporteId
+        - tipoFalhaId
+        - dataDeteccao
+        - impacto
+        - descricaoProblema
+      properties:
+        tipoChamado:
+          type: string
+          enum: [transporte]
+        transporteId:
+          type: integer
+          example: 1
+        tipoFalhaId:
+          type: integer
+          example: 1
+        dataDeteccao:
+          type: string
+          format: date-time
+        impacto:
+          type: string
+          enum: [critico, alto, medio, baixo]
+        descricaoProblema:
+          type: string
+        protocoloOperadora:
+          type: string
+
+    AtualizarChamado:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [aberto, em_atendimento, aguardando_operadora, fechado]
+        protocoloOperadora:
+          type: string
+        descricao:
+          type: string
+        dataDeteccao:
+          type: string
+          format: date-time
+        dataNormalizacao:
+          type: string
+          format: date-time
+
+    FecharChamado:
+      type: object
+      required:
+        - dataResolucao
+      properties:
+        dataResolucao:
+          type: string
+          format: date-time
+          example: '2025-12-15T15:00:00.000Z'
+        semConfirmacaoOperadora:
+          type: boolean
+          default: false
+          example: false
+        observacao:
+          type: string
+          example: Serviço normalizado
+
+    ChamadoHistorico:
+      type: object
+      properties:
+        id:
+          type: integer
+        tipoAcao:
+          type: string
+          example: atualizacao
+        descricao:
+          type: string
+          example: Status alterado para Em atendimento
+        criadoEm:
+          type: string
+          format: date-time
+        usuario:
+          $ref: '#/components/schemas/UsuarioSimples'
+
+    Alerta:
+      type: object
+      properties:
+        chamado:
+          $ref: '#/components/schemas/Chamado'
+        horasAberto:
+          type: number
+          example: 4.5
+        tipoAlerta:
+          type: string
+          enum: [sla, critico, tempo]
+
+    PeriodoImpacto:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        inicio:
+          type: string
+          format: date-time
+          example: '2025-12-15T12:00:00.000Z'
+        fim:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2025-12-15T14:00:00.000Z'
+        descricao:
+          type: string
+          nullable: true
+          example: Horário de pico
+        criadoPor:
+          $ref: '#/components/schemas/UsuarioSimples'
+
+    CriarPeriodoImpacto:
+      type: object
+      required:
+        - inicio
+      properties:
+        inicio:
+          type: string
+          format: date-time
+          example: '2025-12-15T12:00:00.000Z'
+        fim:
+          type: string
+          format: date-time
+          example: '2025-12-15T14:00:00.000Z'
+        descricao:
+          type: string
+          example: Horário de pico
+
+    Anexo:
+      type: object
+      properties:
+        id:
+          type: integer
+        nome:
+          type: string
+          example: evidencia.jpg
+        tipo:
+          type: string
+          example: image/jpeg
+        tamanho:
+          type: integer
+          example: 524288
+        url:
+          type: string
+          example: /uploads/chamados/1/evidencia.jpg
+        criadoEm:
+          type: string
+          format: date-time
+
+    Link:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        designador:
+          type: string
+          example: LINK-001
+        tipoServico:
+          type: string
+          enum: [LINK IP, TRANSPORTE]
+          example: LINK IP
+        capacidade:
+          type: string
+          example: 10G
+        diaVencimento:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 31
+          example: 25
+        ativo:
+          type: boolean
+          example: true
+        enderecoPontaA:
+          type: string
+          nullable: true
+        enderecoPontaB:
+          type: string
+          nullable: true
+        observacoes:
+          type: string
+          nullable: true
+        operadora:
+          $ref: '#/components/schemas/Operadora'
+        pop:
+          $ref: '#/components/schemas/Pop'
+        transporte:
+          $ref: '#/components/schemas/Transporte'
+          nullable: true
+
+    CriarLink:
+      type: object
+      required:
+        - designador
+        - operadoraId
+        - popId
+        - tipoServico
+      properties:
+        designador:
+          type: string
+          example: LINK-001
+        operadoraId:
+          type: integer
+          example: 1
+        popId:
+          type: integer
+          example: 1
+        transporteId:
+          type: integer
+          nullable: true
+          example: 1
+        tipoServico:
+          type: string
+          enum: [LINK IP, TRANSPORTE]
+          example: LINK IP
+        capacidade:
+          type: string
+          example: 10G
+        diaVencimento:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 31
+          example: 25
+        enderecoPontaA:
+          type: string
+        enderecoPontaB:
+          type: string
+        observacoes:
+          type: string
+
+    Transporte:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        nome:
+          type: string
+          example: TRANSPORTE-001
+        fornecedor:
+          type: string
+          nullable: true
+          example: Fornecedor A
+        origem:
+          type: string
+          nullable: true
+          example: São Paulo
+        destino:
+          type: string
+          nullable: true
+          example: Rio de Janeiro
+        ativo:
+          type: boolean
+          example: true
+        observacoes:
+          type: string
+          nullable: true
+        _count:
+          type: object
+          properties:
+            links:
+              type: integer
+            chamados:
+              type: integer
+
+    CriarTransporte:
+      type: object
+      required:
+        - nome
+      properties:
+        nome:
+          type: string
+          example: TRANSPORTE-001
+        fornecedor:
+          type: string
+          example: Fornecedor A
+        origem:
+          type: string
+          example: São Paulo
+        destino:
+          type: string
+          example: Rio de Janeiro
+        observacoes:
+          type: string
+
+    Operadora:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        nome:
+          type: string
+          example: Operadora A
+        telefoneSuporte:
+          type: string
+          nullable: true
+          example: '+55 11 1234-5678'
+        emailSuporte:
+          type: string
+          format: email
+          nullable: true
+          example: suporte@operadora.com
+        portalUrl:
+          type: string
+          format: uri
+          nullable: true
+          example: https://portal.operadora.com
+        slaHoras:
+          type: integer
+          nullable: true
+          example: 4
+        ativo:
+          type: boolean
+          example: true
+        observacoes:
+          type: string
+          nullable: true
+
+    CriarOperadora:
+      type: object
+      required:
+        - nome
+      properties:
+        nome:
+          type: string
+          example: Operadora A
+        telefoneSuporte:
+          type: string
+          example: '+55 11 1234-5678'
+        emailSuporte:
+          type: string
+          format: email
+          example: suporte@operadora.com
+        portalUrl:
+          type: string
+          format: uri
+          example: https://portal.operadora.com
+        slaHoras:
+          type: integer
+          example: 4
+        observacoes:
+          type: string
+
+    Pop:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        codigo:
+          type: string
+          example: SP01
+        nome:
+          type: string
+          nullable: true
+          example: POP São Paulo
+        cidade:
+          type: string
+          example: São Paulo
+        estado:
+          type: string
+          minLength: 2
+          maxLength: 2
+          example: SP
+        endereco:
+          type: string
+          nullable: true
+          example: 'Rua Exemplo, 123'
+        ativo:
+          type: boolean
+          example: true
+
+    CriarPop:
+      type: object
+      required:
+        - codigo
+        - cidade
+        - estado
+      properties:
+        codigo:
+          type: string
+          example: SP01
+        nome:
+          type: string
+          example: POP São Paulo
+        cidade:
+          type: string
+          example: São Paulo
+        estado:
+          type: string
+          minLength: 2
+          maxLength: 2
+          example: SP
+        endereco:
+          type: string
+          example: 'Rua Exemplo, 123'
+
+    Usuario:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        nome:
+          type: string
+          example: João Silva
+        email:
+          type: string
+          format: email
+          example: joao@xmov.com.br
+        perfil:
+          type: string
+          enum: [operador, supervisor]
+          example: operador
+        ativo:
+          type: boolean
+          example: true
+        criadoEm:
+          type: string
+          format: date-time
+        _count:
+          type: object
+          properties:
+            chamadosAbertos:
+              type: integer
+            chamadosFechados:
+              type: integer
+
+    UsuarioSimples:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        nome:
+          type: string
+          example: João Silva
+
+    CriarUsuario:
+      type: object
+      required:
+        - nome
+        - email
+        - senha
+        - perfil
+      properties:
+        nome:
+          type: string
+          example: João Silva
+        email:
+          type: string
+          format: email
+          example: joao@xmov.com.br
+        senha:
+          type: string
+          format: password
+          minLength: 8
+          pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$'
+          example: Senha@123
+        perfil:
+          type: string
+          enum: [operador, supervisor]
+          example: operador
+
+    AtualizarUsuario:
+      type: object
+      properties:
+        nome:
+          type: string
+          example: João Silva
+        email:
+          type: string
+          format: email
+          example: joao@xmov.com.br
+        perfil:
+          type: string
+          enum: [operador, supervisor]
+
+    TipoFalha:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        nome:
+          type: string
+          example: Fibra Rompida
+        descricao:
+          type: string
+          nullable: true
+          example: Cabo de fibra óptica rompido
+
+    ResumoGeral:
+      type: object
+      properties:
+        totalChamados:
+          type: integer
+          example: 150
+        chamadosAbertos:
+          type: integer
+          example: 10
+        chamadosFechados:
+          type: integer
+          example: 140
+        porImpacto:
+          type: object
+          properties:
+            critico:
+              type: integer
+              example: 15
+            alto:
+              type: integer
+              example: 30
+            medio:
+              type: integer
+              example: 50
+            baixo:
+              type: integer
+              example: 55
+        mttr:
+          type: number
+          example: 4.5
+
+    KPIs:
+      type: object
+      properties:
+        mttr:
+          type: object
+          properties:
+            valor:
+              type: number
+              example: 4.5
+            unidade:
+              type: string
+              example: horas
+            descricao:
+              type: string
+              example: Tempo médio de reparo
+        mtti:
+          type: object
+          properties:
+            valor:
+              type: number
+              example: 2.3
+            unidade:
+              type: string
+              example: horas
+            descricao:
+              type: string
+              example: Tempo médio de impacto
+        disponibilidade:
+          type: object
+          properties:
+            valor:
+              type: number
+              example: 99.5
+            unidade:
+              type: string
+              example: '%'
+            descricao:
+              type: string
+              example: Disponibilidade
+        taxaResolucao:
+          type: object
+          properties:
+            valor:
+              type: number
+              example: 93.3
+            unidade:
+              type: string
+              example: '%'
+            descricao:
+              type: string
+              example: Taxa de resolução
+
+    PerformanceOperadoras:
+      type: array
+      items:
+        type: object
+        properties:
+          operadora:
+            type: string
+            example: Operadora A
+          totalChamados:
+            type: integer
+            example: 50
+          tempoMedio:
+            type: number
+            example: 4.2
+          disponibilidade:
+            type: number
+            example: 99.6
+
+security:
+  - cookieAuth: []
+

@@ -1,0 +1,288 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // Usa PostgreSQL em produção (definido por DATABASE_URL)
+  // Para desenvolvimento local com SQLite, use: provider = "sqlite"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Usuários do sistema
+model Usuario {
+  id           Int       @id @default(autoincrement())
+  nome         String
+  email        String    @unique
+  senhaHash    String    @map("senha_hash")
+  perfil       String    @default("operador") // operador, supervisor
+  ativo        Boolean   @default(true)
+  criadoEm     DateTime  @default(now()) @map("criado_em")
+  ultimoAcesso DateTime? @map("ultimo_acesso")
+
+  // Relacionamentos
+  chamadosAbertos  Chamado[]          @relation("ChamadoAbertoPor")
+  chamadosFechados Chamado[]          @relation("ChamadoFechadoPor")
+  historicos       ChamadoHistorico[]
+  anexos           ChamadoAnexo[]
+  periodosImpacto  PeriodoImpacto[]
+
+  @@map("usuarios")
+}
+
+// Operadoras (Vivo, Claro, Oi, etc.)
+model Operadora {
+  id              Int     @id @default(autoincrement())
+  nome            String
+  telefoneSuporte String? @map("telefone_suporte")
+  emailSuporte    String? @map("email_suporte")
+  portalUrl       String? @map("portal_url")
+  slaHoras        Int?    @map("sla_horas")
+  observacoes     String?
+  ativo           Boolean @default(true)
+
+  // Relacionamentos
+  links Link[]
+
+  @@map("operadoras")
+}
+
+// POPs (Pontos de Presença)
+model Pop {
+  id       Int     @id @default(autoincrement())
+  codigo   String  @unique
+  nome     String
+  cidade   String
+  estado   String
+  endereco String?
+  ativo    Boolean @default(true)
+
+  // Relacionamentos
+  links Link[]
+
+  @@map("pops")
+}
+
+// Transportes (Backbone/Infraestrutura)
+model Transporte {
+  id          Int     @id @default(autoincrement())
+  nome        String  // Ex: "Eletronorte STM-BSB"
+  fornecedor  String  // Quem fornece (Eletronorte, Chesf, etc)
+  origem      String  // Cidade/local de origem
+  destino     String  // Cidade/local de destino
+  capacidade  String? // Capacidade total do transporte
+  tecnologia  String? // Fibra, Rádio, Satélite, etc
+  observacoes String?
+  ativo       Boolean @default(true)
+  criadoEm    DateTime @default(now()) @map("criado_em")
+
+  // Relacionamentos
+  links    Link[]
+  chamados Chamado[]
+
+  @@map("transportes")
+}
+
+// Links/Circuitos
+model Link {
+  id           Int     @id @default(autoincrement())
+  designador   String  @unique
+  tipoServico  String? @map("tipo_servico")
+  capacidade   String?
+  diaVencimento Int?   @map("dia_vencimento") // Dia do mês para ciclo de faturamento (1-31)
+  enderecoPontaA String? @map("endereco_ponta_a")
+  enderecoPontaB String? @map("endereco_ponta_b")
+  observacoes  String?
+  ativo        Boolean @default(true)
+  criadoEm     DateTime @default(now()) @map("criado_em")
+
+  // Relacionamentos
+  operadoraId   Int?        @map("operadora_id")
+  operadora     Operadora?  @relation(fields: [operadoraId], references: [id])
+  popId         Int?        @map("pop_id")
+  pop           Pop?        @relation(fields: [popId], references: [id])
+  transporteId  Int?        @map("transporte_id")
+  transporte    Transporte? @relation(fields: [transporteId], references: [id])
+  chamados      Chamado[]
+
+  @@index([transporteId])
+  @@map("links")
+}
+
+// Tipos de Falha
+model TipoFalha {
+  id        Int     @id @default(autoincrement())
+  nome      String
+  descricao String?
+
+  // Relacionamentos
+  chamados Chamado[]
+
+  @@map("tipos_falha")
+}
+
+// Chamados/Incidentes
+model Chamado {
+  id     Int    @id @default(autoincrement())
+  numero String @unique
+
+  // Tipo de chamado: 'link' ou 'transporte'
+  tipoChamado String @default("link") @map("tipo_chamado")
+
+  // Datas importantes para métricas
+  dataDeteccao        DateTime  @map("data_deteccao")
+  dataAbertura        DateTime  @default(now()) @map("data_abertura")
+  dataContatoOperadora DateTime? @map("data_contato_operadora")
+  dataResolucao       DateTime? @map("data_resolucao")
+  dataFechamento      DateTime? @map("data_fechamento")
+  
+  // Período de impacto real nos clientes
+  dataInicioImpacto   DateTime? @map("data_inicio_impacto")
+  dataFimImpacto      DateTime? @map("data_fim_impacto")
+  
+  // Data de normalização manual (para cálculo real de tempo de falha)
+  dataNormalizacao    DateTime? @map("data_normalizacao")
+
+  // Protocolo da operadora/fornecedor
+  protocoloOperadora String? @map("protocolo_operadora")
+
+  // Classificações
+  impacto String // critico, alto, medio, baixo
+  status  String @default("aberto") // aberto, em_andamento, aguardando_operadora, resolvido, fechado
+
+  // Descrições
+  descricaoProblema String  @map("descricao_problema")
+  causaRaiz         String? @map("causa_raiz")
+  solucao           String?
+
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  // Relacionamentos
+  linkId        Int?        @map("link_id")
+  link          Link?       @relation(fields: [linkId], references: [id])
+  transporteId  Int?        @map("transporte_id")
+  transporte    Transporte? @relation(fields: [transporteId], references: [id])
+  tipoFalhaId   Int?        @map("tipo_falha_id")
+  tipoFalha     TipoFalha?  @relation(fields: [tipoFalhaId], references: [id])
+  abertoPorId   Int         @map("aberto_por_id")
+  abertoPor     Usuario     @relation("ChamadoAbertoPor", fields: [abertoPorId], references: [id])
+  fechadoPorId  Int?        @map("fechado_por_id")
+  fechadoPor    Usuario?    @relation("ChamadoFechadoPor", fields: [fechadoPorId], references: [id])
+
+  historicos       ChamadoHistorico[]
+  anexos           ChamadoAnexo[]
+  periodosImpacto  PeriodoImpacto[]
+
+  @@index([status])
+  @@index([dataAbertura])
+  @@index([linkId])
+  @@index([transporteId])
+  @@map("chamados")
+}
+
+// Períodos de Impacto (múltiplos por chamado)
+model PeriodoImpacto {
+  id          Int       @id @default(autoincrement())
+  inicio      DateTime
+  fim         DateTime?
+  descricao   String?   // Ex: "Impacto durante horário de pico"
+  criadoEm    DateTime  @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  // Relacionamentos
+  chamadoId   Int       @map("chamado_id")
+  chamado     Chamado   @relation(fields: [chamadoId], references: [id], onDelete: Cascade)
+  criadoPorId Int       @map("criado_por_id")
+  criadoPor   Usuario   @relation(fields: [criadoPorId], references: [id])
+
+  @@map("periodos_impacto")
+}
+
+// Histórico/Timeline do chamado
+model ChamadoHistorico {
+  id           Int      @id @default(autoincrement())
+  tipoAcao     String   @map("tipo_acao") // atualizacao, mudanca_status, contato_operadora
+  descricao    String
+  statusAnterior String? @map("status_anterior")
+  statusNovo   String?  @map("status_novo")
+  criadoEm     DateTime @default(now()) @map("criado_em")
+
+  // Relacionamentos
+  chamadoId Int     @map("chamado_id")
+  chamado   Chamado @relation(fields: [chamadoId], references: [id], onDelete: Cascade)
+  usuarioId Int     @map("usuario_id")
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@map("chamado_historico")
+}
+
+// Anexos dos chamados
+model ChamadoAnexo {
+  id            Int      @id @default(autoincrement())
+  nomeArquivo   String   @map("nome_arquivo")
+  caminhoArquivo String  @map("caminho_arquivo")
+  tipoArquivo   String?  @map("tipo_arquivo")
+  tamanhoBytes  Int?     @map("tamanho_bytes")
+  criadoEm      DateTime @default(now()) @map("criado_em")
+
+  // Relacionamentos
+  chamadoId Int     @map("chamado_id")
+  chamado   Chamado @relation(fields: [chamadoId], references: [id], onDelete: Cascade)
+  usuarioId Int     @map("usuario_id")
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@map("chamado_anexos")
+}
+
+// Configuração de Webhooks
+model WebhookConfig {
+  id          Int      @id @default(autoincrement())
+  nome        String   // Nome descritivo do webhook
+  url         String   // URL do webhook
+  ativo       Boolean  @default(true)
+  
+  // Eventos que disparam o webhook (JSON array de strings)
+  eventos     String   // JSON: ["chamado.criado", "chamado.atualizado", "chamado.fechado"]
+  
+  // Headers customizados (opcional, JSON object)
+  headers     String?  // JSON: {"Authorization": "Bearer token", "X-Custom": "value"}
+  
+  // Método HTTP (POST, PUT, PATCH)
+  metodo      String   @default("POST")
+  
+  // Timeout em segundos
+  timeout     Int      @default(30)
+  
+  // Retry em caso de falha
+  retentativas Int     @default(3) @map("retentativas")
+  
+  criadoEm    DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  @@map("webhook_config")
+}
+
+// Log de disparos de webhooks
+model WebhookLog {
+  id              Int      @id @default(autoincrement())
+  webhookConfigId Int?     @map("webhook_config_id")
+  evento          String   // Qual evento disparou
+  url             String   // URL chamada
+  metodo          String   // Método HTTP usado
+  payload         String   // Payload enviado (JSON)
+  statusCode      Int?     @map("status_code")
+  resposta        String?  // Resposta do servidor
+  erro            String?  // Mensagem de erro se houver
+  tempoResposta   Int?     @map("tempo_resposta") // Em milissegundos
+  sucesso         Boolean  @default(false)
+  criadoEm        DateTime @default(now()) @map("criado_em")
+
+  @@index([webhookConfigId])
+  @@index([evento])
+  @@index([criadoEm])
+  @@map("webhook_logs")
+}
