@@ -16,6 +16,7 @@
 
 # Misc
 .DS_Store
+Thumbs.db
 *.pem
 
 # Debug
@@ -33,6 +34,9 @@ yarn-error.log*
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# ESLint
+.eslintcache
 
 # Prisma
 prisma/*.db

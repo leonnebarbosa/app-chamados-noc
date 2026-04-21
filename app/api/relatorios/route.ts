@@ -133,7 +133,7 @@ async function getResumoGeral(whereData: any) {
 
 async function getPerformanceOperadoras(whereData: any) {
   const chamados = await prisma.chamado.findMany({
-    where: { ...whereData, link: { isNot: null } },
+    where: { ...whereData, OR: [{ link: { isNot: null } }, { transporte: { isNot: null } }] },
     select: {
       status: true,
       impacto: true,
@@ -142,6 +142,9 @@ async function getPerformanceOperadoras(whereData: any) {
       dataFechamento: true,
       link: {
         include: { operadora: true },
+      },
+      transporte: {
+        select: { fornecedor: true },
       },
     },
   })
@@ -156,7 +159,7 @@ async function getPerformanceOperadoras(whereData: any) {
   }>()
 
   chamados.forEach((chamado) => {
-    const operadoraNome = chamado.link?.operadora?.nome || "Sem Operadora"
+    const operadoraNome = chamado.link?.operadora?.nome || chamado.transporte?.fornecedor || "Sem Operadora"
     
     if (!operadorasMap.has(operadoraNome)) {
       operadorasMap.set(operadoraNome, {
@@ -199,15 +202,16 @@ async function getPerformanceOperadoras(whereData: any) {
 
 async function getIncidentesPorPop(whereData: any) {
   const chamados = await prisma.chamado.findMany({
-    where: { ...whereData, link: { isNot: null } },
+    where: { ...whereData, OR: [{ link: { isNot: null } }, { transporte: { isNot: null } }] },
     include: {
       link: {
         include: { pop: true },
       },
+      transporte: true,
     },
   })
 
-  // Agrupar por POP
+  // Agrupar por POP (links) ou origem/destino (transportes)
   const popsMap = new Map<string, {
     nome: string
     cidade: string
@@ -218,23 +222,40 @@ async function getIncidentesPorPop(whereData: any) {
 
   chamados.forEach((chamado) => {
     const pop = chamado.link?.pop
-    if (!pop) return
 
-    const key = pop.codigo
-    
-    if (!popsMap.has(key)) {
-      popsMap.set(key, {
-        nome: pop.nome,
-        cidade: pop.cidade,
-        estado: pop.estado,
-        total: 0,
-        criticos: 0,
-      })
+    if (pop) {
+      const key = pop.codigo
+
+      if (!popsMap.has(key)) {
+        popsMap.set(key, {
+          nome: pop.nome,
+          cidade: pop.cidade,
+          estado: pop.estado,
+          total: 0,
+          criticos: 0,
+        })
+      }
+
+      const p = popsMap.get(key)!
+      p.total++
+      if (chamado.impacto === "critico") p.criticos++
+    } else if (chamado.transporte) {
+      const key = `transporte-${chamado.transporte.origem}-${chamado.transporte.destino}`
+
+      if (!popsMap.has(key)) {
+        popsMap.set(key, {
+          nome: `${chamado.transporte.nome}`,
+          cidade: `${chamado.transporte.origem} ↔ ${chamado.transporte.destino}`,
+          estado: "",
+          total: 0,
+          criticos: 0,
+        })
+      }
+
+      const p = popsMap.get(key)!
+      p.total++
+      if (chamado.impacto === "critico") p.criticos++
     }
-
-    const p = popsMap.get(key)!
-    p.total++
-    if (chamado.impacto === "critico") p.criticos++
   })
 
   return Array.from(popsMap.values()).sort((a, b) => b.total - a.total)
@@ -498,12 +519,13 @@ async function getKPIsCompletos(whereData: any, dataInicio?: string | null, data
   }
 }
 
-// Links mais problemáticos
+// Links e transportes mais problemáticos
 async function getLinksProblematicos(whereData: any) {
   const chamados = await prisma.chamado.findMany({
-    where: { ...whereData, linkId: { not: null } },
+    where: { ...whereData, OR: [{ linkId: { not: null } }, { transporteId: { not: null } }] },
     select: {
       linkId: true,
+      transporteId: true,
       dataDeteccao: true,
       dataNormalizacao: true,
       dataFechamento: true,
@@ -518,11 +540,21 @@ async function getLinksProblematicos(whereData: any) {
           pop: { select: { cidade: true } },
         },
       },
+      transporte: {
+        select: {
+          id: true,
+          nome: true,
+          fornecedor: true,
+          capacidade: true,
+          origem: true,
+          destino: true,
+        },
+      },
     },
   })
 
-  // Agrupar por link
-  const linksMap = new Map<number, {
+  // Agrupar por link ou transporte
+  const itensMap = new Map<string, {
     id: number
     designador: string
     operadora: string
@@ -535,15 +567,34 @@ async function getLinksProblematicos(whereData: any) {
   }>()
 
   chamados.forEach((c) => {
-    if (!c.link) return
+    let key: string
+    let item: { id: number; designador: string; operadora: string; pop: string; capacidade: string | null }
 
-    if (!linksMap.has(c.link.id)) {
-      linksMap.set(c.link.id, {
+    if (c.link) {
+      key = `link-${c.link.id}`
+      item = {
         id: c.link.id,
         designador: c.link.designador,
         operadora: c.link.operadora?.nome || "Sem operadora",
         pop: c.link.pop?.cidade || "Sem POP",
         capacidade: c.link.capacidade,
+      }
+    } else if (c.transporte) {
+      key = `transporte-${c.transporte.id}`
+      item = {
+        id: c.transporte.id,
+        designador: `${c.transporte.nome} (${c.transporte.fornecedor})`,
+        operadora: c.transporte.fornecedor,
+        pop: `${c.transporte.origem} ↔ ${c.transporte.destino}`,
+        capacidade: c.transporte.capacidade,
+      }
+    } else {
+      return
+    }
+
+    if (!itensMap.has(key)) {
+      itensMap.set(key, {
+        ...item,
         totalChamados: 0,
         chamadosCriticos: 0,
         tempoIndisponivel: 0,
@@ -551,22 +602,22 @@ async function getLinksProblematicos(whereData: any) {
       })
     }
 
-    const link = linksMap.get(c.link.id)!
-    link.totalChamados++
-    
-    if (c.impacto === "critico") link.chamadosCriticos++
-    if (c.status !== "fechado") link.chamadosAbertos++
-    
+    const entry = itensMap.get(key)!
+    entry.totalChamados++
+
+    if (c.impacto === "critico") entry.chamadosCriticos++
+    if (c.status !== "fechado") entry.chamadosAbertos++
+
     // Calcular tempo de indisponibilidade
     const dataFim = c.dataNormalizacao || c.dataFechamento || new Date()
-    link.tempoIndisponivel += (dataFim.getTime() - c.dataDeteccao.getTime()) / (1000 * 60 * 60)
+    entry.tempoIndisponivel += (dataFim.getTime() - c.dataDeteccao.getTime()) / (1000 * 60 * 60)
   })
 
   // Ordenar por total de chamados (mais problemáticos primeiro)
-  return Array.from(linksMap.values())
-    .map(link => ({
-      ...link,
-      tempoIndisponivel: Math.round(link.tempoIndisponivel * 10) / 10,
+  return Array.from(itensMap.values())
+    .map(entry => ({
+      ...entry,
+      tempoIndisponivel: Math.round(entry.tempoIndisponivel * 10) / 10,
     }))
     .sort((a, b) => b.totalChamados - a.totalChamados)
     .slice(0, 15) // Top 15
