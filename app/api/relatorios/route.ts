@@ -80,17 +80,17 @@ async function getResumoGeral(whereData: any) {
     }),
     prisma.chamado.findMany({
       where: { ...whereData, status: "fechado" },
-      select: { dataDeteccao: true, dataNormalizacao: true, dataFechamento: true },
+      select: { dataDeteccao: true, dataNormalizacao: true, dataResolucao: true, dataFechamento: true },
     }),
   ])
 
   // Calcular MTTR (Mean Time To Repair) em horas
-  // Usa dataNormalizacao se disponível, senão dataFechamento
+  // Usa dataNormalizacao se disponível, senão dataResolucao, senão dataFechamento
   let mttrHoras = 0
-  const chamadosComTempo = tempoMedioResolucao.filter(c => c.dataNormalizacao || c.dataFechamento)
+  const chamadosComTempo = tempoMedioResolucao.filter(c => c.dataNormalizacao || c.dataResolucao || c.dataFechamento)
   if (chamadosComTempo.length > 0) {
     const totalHoras = chamadosComTempo.reduce((acc, chamado) => {
-      const dataFim = chamado.dataNormalizacao || chamado.dataFechamento
+      const dataFim = chamado.dataNormalizacao || chamado.dataResolucao || chamado.dataFechamento
       if (dataFim) {
         const diff = dataFim.getTime() - chamado.dataDeteccao.getTime()
         return acc + (diff / (1000 * 60 * 60))
@@ -139,6 +139,7 @@ async function getPerformanceOperadoras(whereData: any) {
       impacto: true,
       dataDeteccao: true,
       dataNormalizacao: true,
+      dataResolucao: true,
       dataFechamento: true,
       link: {
         include: { operadora: true },
@@ -160,7 +161,7 @@ async function getPerformanceOperadoras(whereData: any) {
 
   chamados.forEach((chamado) => {
     const operadoraNome = chamado.link?.operadora?.nome || chamado.transporte?.fornecedor || "Sem Operadora"
-    
+
     if (!operadorasMap.has(operadoraNome)) {
       operadorasMap.set(operadoraNome, {
         nome: operadoraNome,
@@ -173,13 +174,12 @@ async function getPerformanceOperadoras(whereData: any) {
 
     const op = operadorasMap.get(operadoraNome)!
     op.total++
-    
+
     if (chamado.impacto === "critico") op.criticos++
-    
+
     if (chamado.status === "fechado") {
       op.fechados++
-      // Usa dataNormalizacao se disponível, senão dataFechamento
-      const dataFim = chamado.dataNormalizacao || chamado.dataFechamento
+      const dataFim = chamado.dataNormalizacao || chamado.dataResolucao || chamado.dataFechamento
       if (dataFim) {
         const diff = dataFim.getTime() - chamado.dataDeteccao.getTime()
         op.tempoTotal += diff / (1000 * 60 * 60) // em horas
@@ -330,9 +330,10 @@ async function getKPIsCompletos(whereData: any, dataInicio?: string | null, data
     // Chamados fechados para MTTR
     prisma.chamado.findMany({
       where: { ...whereData, status: "fechado" },
-      select: { 
-        dataDeteccao: true, 
-        dataNormalizacao: true, 
+      select: {
+        dataDeteccao: true,
+        dataNormalizacao: true,
+        dataResolucao: true,
         dataFechamento: true,
       },
     }),
@@ -352,10 +353,10 @@ async function getKPIsCompletos(whereData: any, dataInicio?: string | null, data
 
   // MTTR - Mean Time To Repair (em horas)
   let mttrHoras = 0
-  const chamadosComResolucao = chamadosFechados.filter(c => c.dataNormalizacao || c.dataFechamento)
+  const chamadosComResolucao = chamadosFechados.filter(c => c.dataNormalizacao || c.dataResolucao || c.dataFechamento)
   if (chamadosComResolucao.length > 0) {
     const totalHoras = chamadosComResolucao.reduce((acc, c) => {
-      const dataFim = c.dataNormalizacao || c.dataFechamento
+      const dataFim = c.dataNormalizacao || c.dataResolucao || c.dataFechamento
       if (dataFim) {
         return acc + (dataFim.getTime() - c.dataDeteccao.getTime()) / (1000 * 60 * 60)
       }
@@ -364,14 +365,13 @@ async function getKPIsCompletos(whereData: any, dataInicio?: string | null, data
     mttrHoras = totalHoras / chamadosComResolucao.length
   }
 
-  // MTTI - Mean Time To Impact (tempo real de impacto em horas)
-  let mttiHoras = 0
+  // Tempo Total de Impacto (soma dos períodos de impacto reais)
+  let tempoTotalImpacto = 0
   const periodosValidos = periodosImpacto.filter(p => p.fim)
   if (periodosValidos.length > 0) {
-    const totalImpacto = periodosValidos.reduce((acc, p) => {
+    tempoTotalImpacto = periodosValidos.reduce((acc, p) => {
       return acc + (p.fim!.getTime() - p.inicio.getTime()) / (1000 * 60 * 60)
     }, 0)
-    mttiHoras = totalImpacto / periodosValidos.length
   }
 
   // Total de horas de incidente (períodos únicos baseados nos chamados completos)
@@ -389,17 +389,18 @@ async function getKPIsCompletos(whereData: any, dataInicio?: string | null, data
     select: {
       dataDeteccao: true,
       dataNormalizacao: true,
+      dataResolucao: true,
       dataFechamento: true,
     },
   })
-  
+
   if (chamadosParaIncidente.length > 0) {
-    // Criar períodos de incidente (detecção -> normalização/fechamento)
+    // Criar períodos de incidente (detecção -> normalização/resolução/fechamento)
     const periodosIncidente = chamadosParaIncidente
-      .filter(c => c.dataNormalizacao || c.dataFechamento)
+      .filter(c => c.dataNormalizacao || c.dataResolucao || c.dataFechamento)
       .map(c => ({
         inicio: c.dataDeteccao,
-        fim: c.dataNormalizacao || c.dataFechamento!
+        fim: (c.dataNormalizacao || c.dataResolucao || c.dataFechamento)!
       }))
       .sort((a, b) => a.inicio.getTime() - b.inicio.getTime())
     
@@ -496,17 +497,17 @@ async function getKPIsCompletos(whereData: any, dataInicio?: string | null, data
       amostra: chamadosComResolucao.length,
     },
     mtti: {
-      valor: Math.round(mttiHoras * 10) / 10,
+      valor: Math.round(tempoTotalImpacto * 10) / 10,
       unidade: "horas",
-      label: "MTTI",
-      descricao: "Tempo médio de impacto real",
+      label: "Tempo Total de Impacto",
+      descricao: "Tempo total de impacto real nos clientes",
       amostra: periodosValidos.length,
     },
     totalHorasIncidente: {
       valor: Math.round(totalHorasIncidente * 10) / 10,
       unidade: "horas",
       label: "Total Horas Incidente",
-      descricao: "Tempo total com incidentes (detecção→fechamento)",
+      descricao: "Tempo total com incidentes (detecção→normalização)",
       amostra: `${periodosUnidosCount} únicos de ${chamadosParaIncidente.length} totais`,
     },
     disponibilidade: {
@@ -528,6 +529,7 @@ async function getLinksProblematicos(whereData: any) {
       transporteId: true,
       dataDeteccao: true,
       dataNormalizacao: true,
+      dataResolucao: true,
       dataFechamento: true,
       impacto: true,
       status: true,
@@ -609,7 +611,7 @@ async function getLinksProblematicos(whereData: any) {
     if (c.status !== "fechado") entry.chamadosAbertos++
 
     // Calcular tempo de indisponibilidade
-    const dataFim = c.dataNormalizacao || c.dataFechamento || new Date()
+    const dataFim = c.dataNormalizacao || c.dataResolucao || c.dataFechamento || new Date()
     entry.tempoIndisponivel += (dataFim.getTime() - c.dataDeteccao.getTime()) / (1000 * 60 * 60)
   })
 
@@ -693,11 +695,11 @@ async function getRelatorioLink(linkId: number, whereData: any) {
   let tempoTotalImpacto = 0
 
   const chamadosFormatados = chamados.map((c) => {
-    const dataFim = c.dataNormalizacao || c.dataFechamento
-    const duracaoMs = dataFim 
+    const dataFim = c.dataNormalizacao || c.dataResolucao || c.dataFechamento
+    const duracaoMs = dataFim
       ? dataFim.getTime() - c.dataDeteccao.getTime()
       : Date.now() - c.dataDeteccao.getTime()
-    
+
     tempoTotalIndisponivel += duracaoMs
 
     // Somar períodos de impacto
@@ -827,8 +829,8 @@ async function getRelatorioTransporte(transporteId: number, whereData: any) {
   let tempoTotalImpacto = 0
 
   const chamadosFormatados = chamados.map((c) => {
-    const dataFim = c.dataNormalizacao || c.dataFechamento
-    const duracaoMs = dataFim 
+    const dataFim = c.dataNormalizacao || c.dataResolucao || c.dataFechamento
+    const duracaoMs = dataFim
       ? dataFim.getTime() - c.dataDeteccao.getTime()
       : Date.now() - c.dataDeteccao.getTime()
     
