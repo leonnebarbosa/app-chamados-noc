@@ -699,7 +699,7 @@ export default function RelatoriosPage() {
 
       {/* KPIs Avançados */}
       {kpis && (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card className="bg-gradient-to-br from-card to-purple-500/5 border-purple-500/20">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">{kpis.mtti.label}</CardTitle>
@@ -753,6 +753,24 @@ export default function RelatoriosPage() {
               </p>
               <p className="text-xs text-muted-foreground/70 mt-1">
                 ({kpis.disponibilidade.amostra} links monitorados)
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-card to-amber-500/5 border-amber-500/20">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">{kpis.mttr.label} (avançado)</CardTitle>
+              <Clock className="h-4 w-4 text-amber-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-amber-500">
+                {kpis.mttr.valor}{kpis.mttr.unidade}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {kpis.mttr.descricao}
+              </p>
+              <p className="text-xs text-muted-foreground/70 mt-1">
+                ({kpis.mttr.amostra} chamados analisados)
               </p>
             </CardContent>
           </Card>
