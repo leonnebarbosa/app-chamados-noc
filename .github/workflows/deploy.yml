@@ -1,0 +1,39 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    name: Build, Push e Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Login no DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build e Push da imagem
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            leonnecb/noc-chamados:latest
+            leonnecb/noc-chamados:${{ github.sha }}
+
+      - name: Notificar Portainer para atualizar o serviço
+        run: |
+          HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" \
+            -X POST "${{ secrets.PORTAINER_WEBHOOK_URL }}")
+          echo "HTTP Status: $HTTP_CODE"
+          echo "$HTTP_CODE" | grep -qE "^2" && \
+            echo "✅ Deploy disparado com sucesso!" || \
+          (echo "❌ Falha ao chamar o webhook do Portainer (status: $HTTP_CODE)" && exit 1)
