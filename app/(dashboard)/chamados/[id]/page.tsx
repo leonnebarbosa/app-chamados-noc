@@ -139,11 +139,6 @@ export default function ChamadoDetalhesPage({ params }: { params: { id: string }
   const [semConfirmacaoOperadora, setSemConfirmacaoOperadora] = useState(false)
   const [observacaoFechamento, setObservacaoFechamento] = useState("")
 
-  // Normalização form
-  const [dialogNormalizacao, setDialogNormalizacao] = useState(false)
-  const [dataNormalizacao, setDataNormalizacao] = useState("")
-  const [salvandoNormalizacao, setSalvandoNormalizacao] = useState(false)
-
   // Delete
   const [dialogDelete, setDialogDelete] = useState(false)
   const [deletando, setDeletando] = useState(false)
@@ -151,13 +146,10 @@ export default function ChamadoDetalhesPage({ params }: { params: { id: string }
 
   // Edição de campos individuais
   const [dialogEditDataDeteccao, setDialogEditDataDeteccao] = useState(false)
-  const [dialogEditDataNormalizacao, setDialogEditDataNormalizacao] = useState(false)
   const [dialogEditProtocolo, setDialogEditProtocolo] = useState(false)
   const [novaDataDeteccao, setNovaDataDeteccao] = useState("")
-  const [novaDataNormalizacaoEdit, setNovaDataNormalizacaoEdit] = useState("")
   const [novoProtocolo, setNovoProtocolo] = useState("")
   const [salvandoDataDeteccao, setSalvandoDataDeteccao] = useState(false)
-  const [salvandoDataNormalizacaoEdit, setSalvandoDataNormalizacaoEdit] = useState(false)
   const [salvandoProtocolo, setSalvandoProtocolo] = useState(false)
 
   useEffect(() => {
@@ -254,34 +246,6 @@ export default function ChamadoDetalhesPage({ params }: { params: { id: string }
     }
   }
 
-  const handleSalvarDataNormalizacao = async () => {
-    if (!novaDataNormalizacaoEdit) return
-    setSalvandoDataNormalizacaoEdit(true)
-    try {
-      const res = await fetch(`/api/chamados/${params.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          dataNormalizacao: new Date(novaDataNormalizacaoEdit).toISOString(),
-        }),
-      })
-
-      if (!res.ok) throw new Error("Erro ao atualizar data de normalização")
-
-      toast({ title: "Data de normalização atualizada!" })
-      fetchChamado()
-      setDialogEditDataNormalizacao(false)
-    } catch (error) {
-      toast({
-        title: "Erro",
-        description: "Não foi possível atualizar a data de normalização",
-        variant: "destructive",
-      })
-    } finally {
-      setSalvandoDataNormalizacaoEdit(false)
-    }
-  }
-
   const handleSalvarProtocolo = async () => {
     setSalvandoProtocolo(true)
     try {
@@ -369,35 +333,6 @@ export default function ChamadoDetalhesPage({ params }: { params: { id: string }
     }
   }
 
-  const handleSalvarNormalizacao = async () => {
-    if (!dataNormalizacao) return
-    setSalvandoNormalizacao(true)
-
-    try {
-      const res = await fetch(`/api/chamados/${params.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          dataNormalizacao: dataNormalizacao,
-        }),
-      })
-
-      if (!res.ok) throw new Error("Erro ao salvar hora de normalização")
-
-      toast({ title: "Hora de normalização registrada!" })
-      setDialogNormalizacao(false)
-      fetchChamado()
-    } catch (error) {
-      toast({
-        title: "Erro",
-        description: "Não foi possível salvar a hora de normalização",
-        variant: "destructive",
-      })
-    } finally {
-      setSalvandoNormalizacao(false)
-    }
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -449,52 +384,6 @@ export default function ChamadoDetalhesPage({ params }: { params: { id: string }
         <div className="flex gap-2">
           {!isFechado && (
             <>
-              {/* Dialog de Normalização */}
-              <Dialog open={dialogNormalizacao} onOpenChange={setDialogNormalizacao}>
-                <DialogTrigger asChild>
-                  <Button variant="outline">
-                    <Clock className="mr-2 h-4 w-4" />
-                    Normalização
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Registrar Hora de Normalização</DialogTitle>
-                    <DialogDescription>
-                      Informe quando o serviço foi efetivamente normalizado
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                      <Label>Data/Hora da Normalização *</Label>
-                      <Input
-                        type="datetime-local"
-                        value={dataNormalizacao}
-                        onChange={(e) => setDataNormalizacao(e.target.value)}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Este campo é usado para calcular o tempo real de indisponibilidade nos relatórios
-                      </p>
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setDialogNormalizacao(false)}>
-                      Cancelar
-                    </Button>
-                    <Button
-                      onClick={handleSalvarNormalizacao}
-                      disabled={salvandoNormalizacao || !dataNormalizacao}
-                    >
-                      {salvandoNormalizacao ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        "Salvar"
-                      )}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-
               {/* Dialog de Fechamento */}
               <Dialog open={dialogFechamento} onOpenChange={setDialogFechamento}>
               <DialogTrigger asChild>
@@ -512,7 +401,7 @@ export default function ChamadoDetalhesPage({ params }: { params: { id: string }
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label>Data/Hora da Resolução *</Label>
+                  <Label>Data/Hora de Normalização do Incidente *</Label>
                   <Input
                     type="datetime-local"
                     value={dataResolucao}
@@ -745,16 +634,20 @@ export default function ChamadoDetalhesPage({ params }: { params: { id: string }
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Abertura</span>
+                <span>{formatDateTime(chamado.dataAbertura)}</span>
+              </div>
               <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Detecção</span>
+                <span className="text-muted-foreground">Início do Incidente</span>
                 <div className="flex items-center gap-2">
                   <span>{formatDateTime(chamado.dataDeteccao)}</span>
                   {!isFechado && (
                     <Dialog open={dialogEditDataDeteccao} onOpenChange={setDialogEditDataDeteccao}>
                       <DialogTrigger asChild>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           className="h-6 w-6"
                           onClick={() => setNovaDataDeteccao(new Date(chamado.dataDeteccao).toISOString().slice(0, 16))}
                         >
@@ -763,11 +656,11 @@ export default function ChamadoDetalhesPage({ params }: { params: { id: string }
                       </DialogTrigger>
                       <DialogContent>
                         <DialogHeader>
-                          <DialogTitle>Editar Data de Detecção</DialogTitle>
+                          <DialogTitle>Editar Início do Incidente</DialogTitle>
                         </DialogHeader>
                         <div className="space-y-4">
                           <div className="space-y-2">
-                            <Label htmlFor="editDataDeteccao">Data e Hora de Detecção</Label>
+                            <Label htmlFor="editDataDeteccao">Data e Hora de Início do Incidente</Label>
                             <Input
                               id="editDataDeteccao"
                               type="datetime-local"
@@ -796,119 +689,16 @@ export default function ChamadoDetalhesPage({ params }: { params: { id: string }
                   )}
                 </div>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Abertura</span>
-                <span>{formatDateTime(chamado.dataAbertura)}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Normalização</span>
-                <div className="flex items-center gap-2">
-                  {chamado.dataNormalizacao ? (
-                    <>
-                      <span className="text-green-500 font-medium">{formatDateTime(chamado.dataNormalizacao)}</span>
-                      {!isFechado && (
-                        <Dialog open={dialogEditDataNormalizacao} onOpenChange={setDialogEditDataNormalizacao}>
-                          <DialogTrigger asChild>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-6 w-6"
-                              onClick={() => setNovaDataNormalizacaoEdit(new Date(chamado.dataNormalizacao!).toISOString().slice(0, 16))}
-                            >
-                              <Pencil className="h-3 w-3" />
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent>
-                            <DialogHeader>
-                              <DialogTitle>Editar Data de Normalização</DialogTitle>
-                            </DialogHeader>
-                            <div className="space-y-4">
-                              <div className="space-y-2">
-                                <Label htmlFor="editDataNormalizacao">Data e Hora de Normalização</Label>
-                                <Input
-                                  id="editDataNormalizacao"
-                                  type="datetime-local"
-                                  value={novaDataNormalizacaoEdit}
-                                  onChange={(e) => setNovaDataNormalizacaoEdit(e.target.value)}
-                                />
-                              </div>
-                            </div>
-                            <DialogFooter>
-                              <Button variant="outline" onClick={() => setDialogEditDataNormalizacao(false)}>
-                                Cancelar
-                              </Button>
-                              <Button
-                                onClick={handleSalvarDataNormalizacao}
-                                disabled={salvandoDataNormalizacaoEdit || !novaDataNormalizacaoEdit}
-                              >
-                                {salvandoDataNormalizacaoEdit ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  "Salvar"
-                                )}
-                              </Button>
-                            </DialogFooter>
-                          </DialogContent>
-                        </Dialog>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-muted-foreground italic">-</span>
-                      {!isFechado && (
-                        <Dialog open={dialogEditDataNormalizacao} onOpenChange={setDialogEditDataNormalizacao}>
-                          <DialogTrigger asChild>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="h-6"
-                              onClick={() => setNovaDataNormalizacaoEdit("")}
-                            >
-                              <Plus className="h-3 w-3 mr-1" />
-                              <span className="text-xs">Adicionar</span>
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent>
-                            <DialogHeader>
-                              <DialogTitle>Adicionar Data de Normalização</DialogTitle>
-                            </DialogHeader>
-                            <div className="space-y-4">
-                              <div className="space-y-2">
-                                <Label htmlFor="addDataNormalizacao">Data e Hora de Normalização</Label>
-                                <Input
-                                  id="addDataNormalizacao"
-                                  type="datetime-local"
-                                  value={novaDataNormalizacaoEdit}
-                                  onChange={(e) => setNovaDataNormalizacaoEdit(e.target.value)}
-                                />
-                              </div>
-                            </div>
-                            <DialogFooter>
-                              <Button variant="outline" onClick={() => setDialogEditDataNormalizacao(false)}>
-                                Cancelar
-                              </Button>
-                              <Button
-                                onClick={handleSalvarDataNormalizacao}
-                                disabled={salvandoDataNormalizacaoEdit || !novaDataNormalizacaoEdit}
-                              >
-                                {salvandoDataNormalizacaoEdit ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  "Salvar"
-                                )}
-                              </Button>
-                            </DialogFooter>
-                          </DialogContent>
-                        </Dialog>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
               {chamado.dataResolucao && (
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Resolução</span>
+                  <span className="text-muted-foreground">Normalização do Incidente</span>
                   <span>{formatDateTime(chamado.dataResolucao)}</span>
+                </div>
+              )}
+              {chamado.dataFechamento && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Fechamento</span>
+                  <span>{formatDateTime(chamado.dataFechamento)}</span>
                 </div>
               )}
               <Separator />

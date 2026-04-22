@@ -49,6 +49,7 @@ export async function POST(
       data: {
         status: "fechado",
         dataResolucao: new Date(dataResolucao),
+        dataNormalizacao: new Date(dataResolucao),
         dataFechamento: new Date(),
         fechadoPorId: usuario.userId,
       },

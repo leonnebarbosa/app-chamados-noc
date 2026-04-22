@@ -406,7 +406,7 @@ export default function NovoChamadoPage() {
 
               {/* Data Detection */}
               <div className="space-y-2">
-                <Label htmlFor="dataDeteccao">Data/Hora da Detecção *</Label>
+                <Label htmlFor="dataDeteccao">Data/Hora de Início do Incidente *</Label>
                 <Input
                   id="dataDeteccao"
                   type="datetime-local"
