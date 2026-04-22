@@ -199,9 +199,9 @@ export default function ChamadosPage() {
                     <div className="hidden sm:block">
                       <Badge
                         variant={
-                          chamado.impacto === "critico" ? "critical" :
-                          chamado.impacto === "alto" ? "high" :
-                          chamado.impacto === "medio" ? "medium" : "low"
+                          chamado.impacto === "critico" ? "impacto-critico" :
+                          chamado.impacto === "alto" ? "impacto-alto" :
+                          chamado.impacto === "medio" ? "impacto-medio" : "impacto-baixo"
                         }
                         className="w-20 justify-center"
                       >
@@ -249,14 +249,21 @@ export default function ChamadosPage() {
                             {chamado.numero}
                           </span>
                         )}
-                        <Badge variant="outline">
+                        <Badge
+                          variant={
+                            chamado.status === "aberto" ? "status-aberto" :
+                            chamado.status === "em_andamento" ? "status-andamento" :
+                            chamado.status === "aguardando_operadora" ? "status-aguardando" :
+                            chamado.status === "resolvido" ? "status-resolvido" : "status-fechado"
+                          }
+                        >
                           {getStatusLabel(chamado.status)}
                         </Badge>
                         <Badge
                           variant={
-                            chamado.impacto === "critico" ? "critical" :
-                            chamado.impacto === "alto" ? "high" :
-                            chamado.impacto === "medio" ? "medium" : "low"
+                            chamado.impacto === "critico" ? "impacto-critico" :
+                            chamado.impacto === "alto" ? "impacto-alto" :
+                            chamado.impacto === "medio" ? "impacto-medio" : "impacto-baixo"
                           }
                           className="sm:hidden"
                         >

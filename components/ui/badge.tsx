@@ -26,6 +26,24 @@ const badgeVariants = cva(
           "border-transparent bg-yellow-500 text-black",
         low:
           "border-transparent bg-green-500 text-white",
+        "impacto-critico":
+          "border-red-500/40 bg-red-500/10 text-red-500",
+        "impacto-alto":
+          "border-orange-500/40 bg-orange-500/10 text-orange-500",
+        "impacto-medio":
+          "border-yellow-500/40 bg-yellow-500/10 text-yellow-700",
+        "impacto-baixo":
+          "border-green-500/40 bg-green-500/10 text-green-600",
+        "status-aberto":
+          "border-transparent bg-blue-500 text-white hover:bg-blue-600",
+        "status-andamento":
+          "border-transparent bg-violet-500 text-white hover:bg-violet-600",
+        "status-aguardando":
+          "border-transparent bg-amber-400 text-amber-950 hover:bg-amber-500",
+        "status-resolvido":
+          "border-transparent bg-emerald-600 text-white hover:bg-emerald-700",
+        "status-fechado":
+          "border-transparent bg-slate-400 text-white hover:bg-slate-500",
       },
     },
     defaultVariants: {
