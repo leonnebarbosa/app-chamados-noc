@@ -60,7 +60,7 @@ export async function POST(
             pop: true,
           },
         },
-        transporte: true,
+        transporte: { include: { operadora: true } },
         tipoFalha: true,
         abertoPor: { select: { id: true, nome: true } },
         fechadoPor: { select: { id: true, nome: true } },

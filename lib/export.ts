@@ -73,7 +73,7 @@ export function formatChamadosForExport(chamados: any[]) {
     Status: c.status === "aberto" ? "Aberto" : c.status === "em_andamento" ? "Em Andamento" : "Fechado",
     Impacto: c.impacto?.charAt(0).toUpperCase() + c.impacto?.slice(1),
     Link: c.link?.designador || c.transporte?.nome || "-",
-    Operadora: c.link?.operadora?.nome || c.transporte?.fornecedor || "-",
+    Operadora: c.link?.operadora?.nome || c.transporte?.operadora?.nome || "-",
     "Tipo de Falha": c.tipoFalha?.nome || "-",
     "Data Abertura": new Date(c.dataAbertura).toLocaleString("pt-BR"),
     "Data Fechamento": c.dataFechamento ? new Date(c.dataFechamento).toLocaleString("pt-BR") : "-",

@@ -145,7 +145,7 @@ async function getPerformanceOperadoras(whereData: any) {
         include: { operadora: true },
       },
       transporte: {
-        select: { fornecedor: true },
+        include: { operadora: true },
       },
     },
   })
@@ -160,7 +160,7 @@ async function getPerformanceOperadoras(whereData: any) {
   }>()
 
   chamados.forEach((chamado) => {
-    const operadoraNome = chamado.link?.operadora?.nome || chamado.transporte?.fornecedor || "Sem Operadora"
+    const operadoraNome = chamado.link?.operadora?.nome || chamado.transporte?.operadora?.nome || "Sem Operadora"
 
     if (!operadorasMap.has(operadoraNome)) {
       operadorasMap.set(operadoraNome, {
@@ -546,10 +546,10 @@ async function getLinksProblematicos(whereData: any) {
         select: {
           id: true,
           nome: true,
-          fornecedor: true,
           capacidade: true,
           origem: true,
           destino: true,
+          operadora: { select: { nome: true } },
         },
       },
     },
@@ -585,8 +585,8 @@ async function getLinksProblematicos(whereData: any) {
       key = `transporte-${c.transporte.id}`
       item = {
         id: c.transporte.id,
-        designador: `${c.transporte.nome} (${c.transporte.fornecedor})`,
-        operadora: c.transporte.fornecedor,
+        designador: c.transporte.nome,
+        operadora: c.transporte.operadora?.nome || "Sem operadora",
         pop: `${c.transporte.origem} ↔ ${c.transporte.destino}`,
         capacidade: c.transporte.capacidade,
       }
@@ -794,6 +794,7 @@ async function getRelatorioTransporte(transporteId: number, whereData: any) {
   // Buscar informações do transporte
   const transporte = await prisma.transporte.findUnique({
     where: { id: transporteId },
+    include: { operadora: true },
   })
 
   if (!transporte) {
@@ -885,11 +886,11 @@ async function getRelatorioTransporte(transporteId: number, whereData: any) {
   return {
     link: {
       id: transporte.id,
-      designador: `${transporte.nome} (${transporte.fornecedor})`,
+      designador: transporte.nome,
       tipoServico: "Transporte",
       capacidade: transporte.capacidade || "N/A",
       diaVencimento: null,
-      operadora: transporte.fornecedor,
+      operadora: transporte.operadora?.nome || "Sem operadora",
       operadoraTelefone: null,
       operadoraEmail: null,
       pop: `${transporte.origem} ↔ ${transporte.destino}`,

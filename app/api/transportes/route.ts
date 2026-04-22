@@ -20,6 +20,7 @@ export async function GET(request: NextRequest) {
   const transportes = await prisma.transporte.findMany({
     where,
     include: includeLinks ? {
+      operadora: true,
       links: {
         where: { ativo: true },
         include: {
@@ -31,6 +32,7 @@ export async function GET(request: NextRequest) {
         select: { links: true, chamados: { where: { status: { not: "fechado" } } } }
       }
     } : {
+      operadora: true,
       _count: {
         select: { links: true, chamados: { where: { status: { not: "fechado" } } } }
       }
@@ -49,11 +51,11 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { nome, fornecedor, origem, destino, capacidade, tecnologia, observacoes } = body
+    const { nome, operadoraId, origem, destino, capacidade, tecnologia, observacoes } = body
 
-    if (!nome || !fornecedor || !origem || !destino) {
+    if (!nome || !operadoraId || !origem || !destino) {
       return NextResponse.json(
-        { error: "Nome, fornecedor, origem e destino são obrigatórios" },
+        { error: "Nome, operadora, origem e destino são obrigatórios" },
         { status: 400 }
       )
     }
@@ -61,7 +63,7 @@ export async function POST(request: NextRequest) {
     const transporte = await prisma.transporte.create({
       data: {
         nome,
-        fornecedor,
+        operadoraId,
         origem,
         destino,
         capacidade: capacidade || null,

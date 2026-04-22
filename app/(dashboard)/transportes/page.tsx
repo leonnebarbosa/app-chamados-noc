@@ -42,10 +42,15 @@ import {
 } from "lucide-react"
 import { TECNOLOGIAS_TRANSPORTE, formatarCapacidade, parsearCapacidade } from "@/lib/constants"
 
+interface Operadora {
+  id: number
+  nome: string
+}
+
 interface Transporte {
   id: number
   nome: string
-  fornecedor: string
+  operadora: Operadora | null
   origem: string
   destino: string
   capacidade: string | null
@@ -61,6 +66,7 @@ interface Transporte {
 export default function TransportesPage() {
   const { toast } = useToast()
   const [transportes, setTransportes] = useState<Transporte[]>([])
+  const [operadoras, setOperadoras] = useState<Operadora[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -70,7 +76,7 @@ export default function TransportesPage() {
   // Form
   const [editingId, setEditingId] = useState<number | null>(null)
   const [nome, setNome] = useState("")
-  const [fornecedor, setFornecedor] = useState("")
+  const [operadoraId, setOperadoraId] = useState("")
   const [origem, setOrigem] = useState("")
   const [destino, setDestino] = useState("")
   const [capacidadeValor, setCapacidadeValor] = useState("")
@@ -78,7 +84,14 @@ export default function TransportesPage() {
   const [tecnologia, setTecnologia] = useState("")
   const [observacoes, setObservacoes] = useState("")
 
-  const tecnologiasOptions: ComboboxOption[] = useMemo(() => 
+  const operadorasOptions: ComboboxOption[] = useMemo(() =>
+    operadoras.map(op => ({
+      value: op.id.toString(),
+      label: op.nome,
+    }))
+  , [operadoras])
+
+  const tecnologiasOptions: ComboboxOption[] = useMemo(() =>
     TECNOLOGIAS_TRANSPORTE.map(t => ({
       value: t.value,
       label: t.label,
@@ -91,8 +104,12 @@ export default function TransportesPage() {
 
   const fetchTransportes = async () => {
     try {
-      const res = await fetch("/api/transportes")
-      setTransportes(await res.json())
+      const [transportesRes, operadorasRes] = await Promise.all([
+        fetch("/api/transportes"),
+        fetch("/api/operadoras?ativo=true"),
+      ])
+      setTransportes(await transportesRes.json())
+      setOperadoras(await operadorasRes.json())
     } catch (error) {
       console.error(error)
     } finally {
@@ -103,7 +120,7 @@ export default function TransportesPage() {
   const resetForm = () => {
     setEditingId(null)
     setNome("")
-    setFornecedor("")
+    setOperadoraId("")
     setOrigem("")
     setDestino("")
     setCapacidadeValor("")
@@ -115,7 +132,7 @@ export default function TransportesPage() {
   const openEditDialog = (t: Transporte) => {
     setEditingId(t.id)
     setNome(t.nome)
-    setFornecedor(t.fornecedor)
+    setOperadoraId(t.operadora?.id?.toString() || "")
     setOrigem(t.origem)
     setDestino(t.destino)
     
@@ -130,7 +147,7 @@ export default function TransportesPage() {
   }
 
   const handleSubmit = async () => {
-    if (!nome || !fornecedor || !origem || !destino) return
+    if (!nome || !operadoraId || !origem || !destino) return
     setSaving(true)
 
     try {
@@ -147,7 +164,7 @@ export default function TransportesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           nome,
-          fornecedor,
+          operadoraId: parseInt(operadoraId),
           origem,
           destino,
           capacidade,
@@ -204,7 +221,7 @@ export default function TransportesPage() {
     const termo = busca.toLowerCase()
     return (
       t.nome.toLowerCase().includes(termo) ||
-      t.fornecedor.toLowerCase().includes(termo) ||
+      (t.operadora?.nome || "").toLowerCase().includes(termo) ||
       t.origem.toLowerCase().includes(termo) ||
       t.destino.toLowerCase().includes(termo)
     )
@@ -249,11 +266,14 @@ export default function TransportesPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Fornecedor *</Label>
-                  <Input
-                    placeholder="Ex: Eletronorte, Chesf, Copel"
-                    value={fornecedor}
-                    onChange={(e) => setFornecedor(e.target.value)}
+                  <Label>Operadora *</Label>
+                  <Combobox
+                    options={operadorasOptions}
+                    value={operadoraId}
+                    onValueChange={setOperadoraId}
+                    placeholder="Buscar operadora..."
+                    searchPlaceholder="Digite para buscar..."
+                    emptyMessage="Nenhuma operadora encontrada"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -309,7 +329,7 @@ export default function TransportesPage() {
                 <Button variant="outline" onClick={() => { setDialogOpen(false); resetForm(); }}>
                   Cancelar
                 </Button>
-                <Button onClick={handleSubmit} disabled={saving || !nome || !fornecedor || !origem || !destino}>
+                <Button onClick={handleSubmit} disabled={saving || !nome || !operadoraId || !origem || !destino}>
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : (editingId ? "Salvar" : "Criar")}
                 </Button>
               </DialogFooter>
@@ -324,7 +344,7 @@ export default function TransportesPage() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar por nome, fornecedor, origem ou destino..."
+              placeholder="Buscar por nome, operadora, origem ou destino..."
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
               className="pl-10"
@@ -409,9 +429,11 @@ export default function TransportesPage() {
                   <MapPin className="h-4 w-4 shrink-0" />
                   <span className="truncate">{t.origem} → {t.destino}</span>
                 </div>
-                <div className="text-muted-foreground">
-                  <span className="font-medium">Fornecedor:</span> {t.fornecedor}
-                </div>
+                {t.operadora && (
+                  <div className="text-muted-foreground">
+                    <span className="font-medium">Operadora:</span> {t.operadora.nome}
+                  </div>
+                )}
                 {t.tecnologia && (
                   <div className="text-muted-foreground">
                     <span className="font-medium">Tecnologia:</span> {getTecnologiaLabel(t.tecnologia)}

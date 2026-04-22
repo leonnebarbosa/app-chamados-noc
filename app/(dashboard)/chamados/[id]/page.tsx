@@ -90,7 +90,7 @@ interface Chamado {
   } | null
   transporte: {
     nome: string
-    fornecedor: string | null
+    operadora: { id: number; nome: string } | null
   } | null
   tipoFalha: { nome: string } | null
   abertoPor: { id: number; nome: string } | null

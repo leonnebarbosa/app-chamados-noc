@@ -255,7 +255,7 @@ export function formatarChamadoParaWebhook(chamado: any) {
       ? {
           id: chamado.transporte.id,
           nome: chamado.transporte.nome,
-          fornecedor: chamado.transporte.fornecedor,
+          operadora: chamado.transporte.operadora?.nome || null,
         }
       : null,
     abertoPor: {

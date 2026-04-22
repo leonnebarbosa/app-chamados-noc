@@ -219,7 +219,7 @@ export default function RelatoriosPage() {
         setTodosTransportes(transportesList.map((t: any) => ({
           id: t.id,
           designador: t.nome,
-          operadora: t.fornecedor || "Sem fornecedor",
+          operadora: t.operadora?.nome || "Sem operadora",
           diaVencimento: null // Transportes não têm dia de vencimento
         })))
       }
@@ -229,12 +229,12 @@ export default function RelatoriosPage() {
       if (operadorasListRes.ok) {
         const operadorasList = await operadorasListRes.json()
         const operadorasDeLinks = operadorasList.map((o: any) => o.nome)
-        
-        // Incluir fornecedores de transportes como "operadoras" para filtro
-        const fornecedoresUnicos = Array.from(new Set(transportesList.map((t: any) => t.fornecedor).filter(Boolean)))
-        const todasOperadorasEFornecedores = Array.from(new Set([...operadorasDeLinks, ...fornecedoresUnicos])).sort()
-        
-        setTodasOperadoras(todasOperadorasEFornecedores.map((nome, idx) => ({
+
+        // Incluir operadoras de transportes para filtro
+        const operadorasDeTransportes = transportesList.map((t: any) => t.operadora?.nome).filter(Boolean)
+        const todasOperadorasUnicas = Array.from(new Set([...operadorasDeLinks, ...operadorasDeTransportes])).sort()
+
+        setTodasOperadoras(todasOperadorasUnicas.map((nome, idx) => ({
           id: idx,
           nome: nome
         })))

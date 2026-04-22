@@ -50,7 +50,7 @@ interface ChamadoData {
 interface Transporte {
   id: number
   nome: string
-  fornecedor: string
+  operadora: { id: number; nome: string } | null
   origem: string
   destino: string
   capacidade: string | null
@@ -195,10 +195,12 @@ export default function TransporteDetalhesPage({ params }: { params: { id: strin
             <CardTitle>Informações</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 text-sm">
-            <div>
-              <span className="text-muted-foreground">Fornecedor</span>
-              <p className="font-medium">{transporte.fornecedor}</p>
-            </div>
+            {transporte.operadora && (
+              <div>
+                <span className="text-muted-foreground">Operadora</span>
+                <p className="font-medium">{transporte.operadora.nome}</p>
+              </div>
+            )}
             <div>
               <span className="text-muted-foreground">Rota</span>
               <p className="font-medium">{transporte.origem} → {transporte.destino}</p>

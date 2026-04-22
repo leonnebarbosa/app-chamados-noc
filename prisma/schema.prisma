@@ -45,7 +45,8 @@ model Operadora {
   ativo           Boolean @default(true)
 
   // Relacionamentos
-  links Link[]
+  links       Link[]
+  transportes Transporte[]
 
   @@map("operadoras")
 }
@@ -70,7 +71,6 @@ model Pop {
 model Transporte {
   id          Int     @id @default(autoincrement())
   nome        String  // Ex: "Eletronorte STM-BSB"
-  fornecedor  String  // Quem fornece (Eletronorte, Chesf, etc)
   origem      String  // Cidade/local de origem
   destino     String  // Cidade/local de destino
   capacidade  String? // Capacidade total do transporte
@@ -80,8 +80,10 @@ model Transporte {
   criadoEm    DateTime @default(now()) @map("criado_em")
 
   // Relacionamentos
-  links    Link[]
-  chamados Chamado[]
+  operadoraId  Int?       @map("operadora_id")
+  operadora    Operadora? @relation(fields: [operadoraId], references: [id])
+  links        Link[]
+  chamados     Chamado[]
 
   @@map("transportes")
 }

@@ -29,6 +29,7 @@ export async function GET(
       },
       transporte: {
         include: {
+          operadora: true,
           links: {
             where: { ativo: true },
             include: {
@@ -175,7 +176,7 @@ export async function PUT(
             pop: true,
           },
         },
-        transporte: true,
+        transporte: { include: { operadora: true } },
         tipoFalha: true,
         abertoPor: { select: { id: true, nome: true } },
         fechadoPor: { select: { id: true, nome: true } },

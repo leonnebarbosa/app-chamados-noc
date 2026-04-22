@@ -19,6 +19,7 @@ export async function GET(
   const transporte = await prisma.transporte.findUnique({
     where: { id },
     include: {
+      operadora: true,
       links: {
         where: { ativo: true },
         include: {
@@ -67,13 +68,13 @@ export async function PUT(
 
   try {
     const body = await request.json()
-    const { nome, fornecedor, origem, destino, capacidade, tecnologia, observacoes, ativo } = body
+    const { nome, operadoraId, origem, destino, capacidade, tecnologia, observacoes, ativo } = body
 
     const transporte = await prisma.transporte.update({
       where: { id },
       data: {
         nome,
-        fornecedor,
+        operadoraId,
         origem,
         destino,
         capacidade: capacidade || null,

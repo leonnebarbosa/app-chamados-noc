@@ -33,7 +33,7 @@ interface Operadora {
 interface Transporte {
   id: number
   nome: string
-  fornecedor: string
+  operadora: { id: number; nome: string } | null
   origem: string
   destino: string
   _count?: { links: number }
@@ -375,7 +375,7 @@ export default function NovoChamadoPage() {
                     />
                     {selectedTransporte && (
                       <p className="text-xs text-muted-foreground">
-                        Fornecedor: {selectedTransporte.fornecedor} | Rota: {selectedTransporte.origem} → {selectedTransporte.destino}
+                        Operadora: {selectedTransporte.operadora?.nome || "—"} | Rota: {selectedTransporte.origem} → {selectedTransporte.destino}
                       </p>
                     )}
                   </div>
