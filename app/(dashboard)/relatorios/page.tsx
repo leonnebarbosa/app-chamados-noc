@@ -152,11 +152,14 @@ export default function RelatoriosPage() {
   const [todasOperadoras, setTodasOperadoras] = useState<{id: number, nome: string}[]>([])
   const [operadoraFiltro, setOperadoraFiltro] = useState<string>("todas")
   
-  // Estado para mês de referência na exportação
+  // Estado para período de exportação
+  const [tipoPeriodoExport, setTipoPeriodoExport] = useState<"mes" | "custom">("mes")
   const [mesReferencia, setMesReferencia] = useState(() => {
     const hoje = new Date()
     return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`
   })
+  const [dataInicioExport, setDataInicioExport] = useState("")
+  const [dataFimExport, setDataFimExport] = useState("")
 
   useEffect(() => {
     // Calcular datas baseado no período
@@ -268,8 +271,18 @@ export default function RelatoriosPage() {
     }
 
     setExportandoLinks(true)
-    const periodoExport = calcularPeriodoMesReferencia()
-    const params = `dataInicio=${periodoExport.dataInicio}&dataFim=${periodoExport.dataFim}`
+    let params: string
+    if (tipoPeriodoExport === "custom") {
+      if (!dataInicioExport || !dataFimExport) {
+        toast({ title: "Preencha as datas de início e fim", variant: "destructive" })
+        setExportandoLinks(false)
+        return
+      }
+      params = `dataInicio=${dataInicioExport}&dataFim=${dataFimExport}`
+    } else {
+      const periodoExport = calcularPeriodoMesReferencia()
+      params = `dataInicio=${periodoExport.dataInicio}&dataFim=${periodoExport.dataFim}`
+    }
     let exportados = 0
     let erros = 0
 
@@ -1203,26 +1216,64 @@ export default function RelatoriosPage() {
                   </Button>
                 </div>
 
-                {/* Seletor de Mês de Referência */}
+                {/* Seletor de Período */}
                 <div className="bg-muted/50 rounded-lg p-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-4 flex-wrap">
                     <div className="flex items-center gap-2">
-                      <Label htmlFor="mesReferencia" className="whitespace-nowrap">📅 Mês de Referência:</Label>
-                      <Input
-                        id="mesReferencia"
-                        type="month"
-                        value={mesReferencia}
-                        onChange={(e) => setMesReferencia(e.target.value)}
-                        className="w-48"
-                      />
+                      <Label className="whitespace-nowrap">Período:</Label>
+                      <Select value={tipoPeriodoExport} onValueChange={(v: "mes" | "custom") => setTipoPeriodoExport(v)}>
+                        <SelectTrigger className="w-[200px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="mes">Mês de Referência</SelectItem>
+                          <SelectItem value="custom">Personalizado</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      Período: <strong>{calcularPeriodoMesReferencia().mesNome}</strong>
-                    </p>
+                    {tipoPeriodoExport === "mes" ? (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            id="mesReferencia"
+                            type="month"
+                            value={mesReferencia}
+                            onChange={(e) => setMesReferencia(e.target.value)}
+                            className="w-48"
+                          />
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Período: <strong>{calcularPeriodoMesReferencia().mesNome}</strong>
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <Label className="whitespace-nowrap">Início:</Label>
+                          <Input
+                            type="date"
+                            value={dataInicioExport}
+                            onChange={(e) => setDataInicioExport(e.target.value)}
+                            className="w-44"
+                          />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Label className="whitespace-nowrap">Fim:</Label>
+                          <Input
+                            type="date"
+                            value={dataFimExport}
+                            onChange={(e) => setDataFimExport(e.target.value)}
+                            className="w-44"
+                          />
+                        </div>
+                      </>
+                    )}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    💡 Links com dia de vencimento definido usarão o ciclo de faturamento automaticamente.
-                  </p>
+                  {tipoPeriodoExport === "mes" && (
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Links com dia de vencimento definido usarão o ciclo de faturamento automaticamente.
+                    </p>
+                  )}
                 </div>
 
                 {/* Lista de Links e Transportes */}
