@@ -134,10 +134,34 @@ export async function PUT(
       updateData.dataFimImpacto = dataFimImpacto ? new Date(dataFimImpacto) : null
     }
 
+    // Validação cruzada: a normalização não pode ser anterior ao início do incidente
+    const novaDataDeteccao =
+      body.dataDeteccao !== undefined ? new Date(body.dataDeteccao) : chamadoAtual.dataDeteccao
+    const novaDataNormalizacao =
+      body.dataNormalizacao !== undefined
+        ? body.dataNormalizacao
+          ? new Date(body.dataNormalizacao)
+          : null
+        : chamadoAtual.dataNormalizacao
+
+    if (
+      novaDataNormalizacao &&
+      novaDataDeteccao &&
+      novaDataNormalizacao.getTime() < novaDataDeteccao.getTime()
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "A normalização do incidente não pode ser anterior ao início do incidente.",
+        },
+        { status: 400 }
+      )
+    }
+
     // Campo de normalização manual
     if (body.dataNormalizacao !== undefined) {
       updateData.dataNormalizacao = body.dataNormalizacao ? new Date(body.dataNormalizacao) : null
-      
+
       // Registra histórico
       if (body.dataNormalizacao) {
         await prisma.chamadoHistorico.create({
@@ -154,7 +178,7 @@ export async function PUT(
     // Campo de detecção
     if (body.dataDeteccao !== undefined) {
       updateData.dataDeteccao = new Date(body.dataDeteccao)
-      
+
       // Registra histórico
       await prisma.chamadoHistorico.create({
         data: {

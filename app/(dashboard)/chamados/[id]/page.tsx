@@ -56,12 +56,12 @@ import {
 } from "lucide-react"
 import { FileUpload } from "@/components/file-upload"
 import { TimelineImpacto } from "@/components/chamado/timeline-impacto"
-import { 
-  getStatusLabel, 
-  getImpactoLabel, 
-  calcularTempoAberto, 
+import {
+  getStatusLabel,
+  getImpactoLabel,
+  calcularDuracao,
   formatDateTime,
-  formatRelativeTime
+  formatRelativeTime,
 } from "@/lib/utils"
 
 interface Chamado {
@@ -220,6 +220,20 @@ export default function ChamadoDetalhesPage({ params }: { params: { id: string }
 
   const handleSalvarDataDeteccao = async () => {
     if (!novaDataDeteccao) return
+
+    if (
+      chamado?.dataNormalizacao &&
+      new Date(novaDataDeteccao).getTime() > new Date(chamado.dataNormalizacao).getTime()
+    ) {
+      toast({
+        title: "Data inválida",
+        description:
+          "O início do incidente não pode ser posterior à normalização já registrada.",
+        variant: "destructive",
+      })
+      return
+    }
+
     setSalvandoDataDeteccao(true)
     try {
       const res = await fetch(`/api/chamados/${params.id}`, {
@@ -230,15 +244,18 @@ export default function ChamadoDetalhesPage({ params }: { params: { id: string }
         }),
       })
 
-      if (!res.ok) throw new Error("Erro ao atualizar data de detecção")
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || "Erro ao atualizar data de detecção")
+      }
 
       toast({ title: "Data de detecção atualizada!" })
       fetchChamado()
       setDialogEditDataDeteccao(false)
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Erro",
-        description: "Não foi possível atualizar a data de detecção",
+        description: error.message || "Não foi possível atualizar a data de detecção",
         variant: "destructive",
       })
     } finally {
@@ -304,6 +321,30 @@ export default function ChamadoDetalhesPage({ params }: { params: { id: string }
 
   const handleFechamento = async () => {
     if (!dataResolucao) return
+
+    if (
+      chamado &&
+      new Date(dataResolucao).getTime() < new Date(chamado.dataDeteccao).getTime()
+    ) {
+      toast({
+        title: "Data inválida",
+        description:
+          "A normalização do incidente não pode ser anterior ao início do incidente.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (chamado?.periodosImpacto?.some((p) => !p.fim)) {
+      toast({
+        title: "Período de impacto em aberto",
+        description:
+          "Encerre o período de impacto ainda em andamento antes de fechar o chamado.",
+        variant: "destructive",
+      })
+      return
+    }
+
     setFechando(true)
 
     try {
@@ -317,15 +358,18 @@ export default function ChamadoDetalhesPage({ params }: { params: { id: string }
         }),
       })
 
-      if (!res.ok) throw new Error("Erro ao fechar chamado")
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || "Erro ao fechar chamado")
+      }
 
       toast({ title: "Chamado fechado com sucesso!" })
       setDialogFechamento(false)
       fetchChamado()
-    } catch (error) {
+    } catch (error: any) {
       toast({
-        title: "Erro",
-        description: "Não foi possível fechar o chamado",
+        title: "Erro ao fechar chamado",
+        description: error.message || "Não foi possível fechar o chamado",
         variant: "destructive",
       })
     } finally {
@@ -344,6 +388,7 @@ export default function ChamadoDetalhesPage({ params }: { params: { id: string }
   if (!chamado) return null
 
   const isFechado = chamado.status === "fechado"
+  const temPeriodoImpactoAberto = (chamado.periodosImpacto || []).some((p) => !p.fim)
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -400,13 +445,31 @@ export default function ChamadoDetalhesPage({ params }: { params: { id: string }
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
+                {temPeriodoImpactoAberto && (
+                  <div className="flex items-start gap-2 rounded-md border border-orange-500/40 bg-orange-500/10 p-3 text-sm text-orange-200">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-orange-400" />
+                    <div>
+                      Existe um período de impacto em andamento. Encerre o período
+                      antes de fechar o chamado.
+                    </div>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label>Data/Hora de Normalização do Incidente *</Label>
                   <Input
                     type="datetime-local"
                     value={dataResolucao}
+                    min={new Date(chamado.dataDeteccao).toISOString().slice(0, 16)}
                     onChange={(e) => setDataResolucao(e.target.value)}
                   />
+                  {dataResolucao &&
+                    new Date(dataResolucao).getTime() <
+                      new Date(chamado.dataDeteccao).getTime() && (
+                      <p className="text-xs text-destructive">
+                        Não pode ser anterior ao início do incidente (
+                        {formatDateTime(chamado.dataDeteccao)}).
+                      </p>
+                    )}
                 </div>
                 <div className="flex items-center space-x-2">
                   <input
@@ -437,7 +500,13 @@ export default function ChamadoDetalhesPage({ params }: { params: { id: string }
                 <Button
                   variant="success"
                   onClick={handleFechamento}
-                  disabled={fechando || !dataResolucao}
+                  disabled={
+                    fechando ||
+                    !dataResolucao ||
+                    temPeriodoImpactoAberto ||
+                    new Date(dataResolucao).getTime() <
+                      new Date(chamado.dataDeteccao).getTime()
+                  }
                 >
                   {fechando ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -702,13 +771,36 @@ export default function ChamadoDetalhesPage({ params }: { params: { id: string }
                 </div>
               )}
               <Separator />
-              <div className="flex justify-between font-medium">
-                <span>Tempo Aberto</span>
-                <span className={isFechado ? "" : "text-primary"}>
-                  {calcularTempoAberto(chamado.dataDeteccao)}
+              <div className="rounded-md border border-primary/30 bg-primary/5 p-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                      Tempo de Incidente
+                    </span>
+                    <span className="text-[11px] text-muted-foreground/80">
+                      {chamado.dataNormalizacao
+                        ? "Início → Normalização"
+                        : "Em andamento"}
+                    </span>
+                  </div>
+                  <span
+                    className={`text-2xl font-bold tabular-nums ${
+                      chamado.dataNormalizacao ? "" : "text-primary"
+                    }`}
+                  >
+                    {calcularDuracao(
+                      chamado.dataDeteccao,
+                      chamado.dataNormalizacao
+                    )}
+                  </span>
+                </div>
+              </div>
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Tempo do chamado (até fechamento)</span>
+                <span className="tabular-nums">
+                  {calcularDuracao(chamado.dataAbertura, chamado.dataFechamento)}
                 </span>
               </div>
-              
             </CardContent>
           </Card>
 
