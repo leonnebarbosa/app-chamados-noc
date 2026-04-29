@@ -88,18 +88,34 @@ Acesse diretamente no navegador:
 
 ## 💡 Exemplos Rápidos
 
+> ℹ️ A API **não usa header `Authorization: Bearer`**. O login retorna o JWT em um cookie `auth-token` (HTTPOnly). Em todas as requisições subsequentes você precisa **reenviar esse cookie** — é assim que a API reconhece sua sessão.
+
 ### 1. Fazer Login
 
 ```bash
+# -c cookies.txt salva o cookie auth-token retornado pelo servidor
 curl -X POST https://chamados.xmov.com.br/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"usuario@xmov.com.br","senha":"senha"}' \
   -c cookies.txt
 ```
 
-### 2. Criar um Chamado
+Resposta esperada (200):
+
+```json
+{ "success": true, "nome": "Fulano", "perfil": "operador" }
+```
+
+E o servidor envia um header `Set-Cookie` parecido com:
+
+```
+Set-Cookie: auth-token=eyJhbGciOi...; Path=/; HttpOnly; SameSite=Lax; Max-Age=28800
+```
+
+### 2. Criar um Chamado (usando o cookie do login)
 
 ```bash
+# -b cookies.txt envia o cookie auth-token salvo no passo 1
 curl -X POST https://chamados.xmov.com.br/api/chamados \
   -H "Content-Type: application/json" \
   -b cookies.txt \
@@ -126,6 +142,123 @@ curl "https://chamados.xmov.com.br/api/chamados?status=aberto" \
 curl "https://chamados.xmov.com.br/api/relatorios?tipo=kpis" \
   -b cookies.txt
 ```
+
+### 5. Verificar quem está autenticado
+
+```bash
+curl https://chamados.xmov.com.br/api/auth/me -b cookies.txt
+```
+
+### 6. Logout (invalida o cookie)
+
+```bash
+curl -X POST https://chamados.xmov.com.br/api/auth/logout -b cookies.txt -c cookies.txt
+```
+
+---
+
+## 🔑 Usando o Token de Autenticação
+
+Depois do login, o token JWT fica armazenado no cookie `auth-token` (HTTPOnly, `SameSite=Lax`, validade de 8 horas). Você não precisa lê-lo — basta **reenviar o cookie** em cada requisição. Veja como fazer isso em cada cliente:
+
+### cURL
+
+```bash
+# 1) Login: salva o cookie em cookies.txt
+curl -X POST https://chamados.xmov.com.br/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"usuario@xmov.com.br","senha":"senha"}' \
+  -c cookies.txt
+
+# 2) Endpoint protegido: reusa o cookie com -b
+curl https://chamados.xmov.com.br/api/chamados -b cookies.txt
+```
+
+### JavaScript (browser / `fetch`)
+
+No navegador, o cookie é enviado automaticamente desde que você use `credentials: 'include'` (cross-origin) ou `credentials: 'same-origin'` (mesma origem):
+
+```javascript
+// Login
+await fetch('https://chamados.xmov.com.br/api/auth/login', {
+  method: 'POST',
+  credentials: 'include',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ email: 'usuario@xmov.com.br', senha: 'senha' }),
+});
+
+// Requisição autenticada (cookie auth-token vai junto automaticamente)
+const res = await fetch('https://chamados.xmov.com.br/api/chamados', {
+  credentials: 'include',
+});
+const chamados = await res.json();
+```
+
+> ⚠️ Sem `credentials: 'include'` o navegador **não envia** o cookie e você recebe 401.
+
+### Axios
+
+```javascript
+import axios from 'axios';
+
+const api = axios.create({
+  baseURL: 'https://chamados.xmov.com.br/api',
+  withCredentials: true, // envia cookies em todas as requests
+});
+
+await api.post('/auth/login', { email: 'usuario@xmov.com.br', senha: 'senha' });
+const { data } = await api.get('/chamados');
+```
+
+### Node.js (sem navegador) — `fetch` + cookie manual
+
+Em Node, o `fetch` global não persiste cookies entre requests. Capture o `Set-Cookie` do login e envie de volta no header `Cookie`:
+
+```javascript
+// Node 18+
+const loginRes = await fetch('https://chamados.xmov.com.br/api/auth/login', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ email: 'usuario@xmov.com.br', senha: 'senha' }),
+});
+
+const setCookie = loginRes.headers.get('set-cookie') ?? '';
+const authCookie = setCookie.split(';')[0]; // ex.: "auth-token=eyJhbGciOi..."
+
+const res = await fetch('https://chamados.xmov.com.br/api/chamados', {
+  headers: { Cookie: authCookie },
+});
+console.log(await res.json());
+```
+
+### Python (`requests`)
+
+`requests.Session()` cuida do cookie automaticamente:
+
+```python
+import requests
+
+s = requests.Session()
+s.post(
+    "https://chamados.xmov.com.br/api/auth/login",
+    json={"email": "usuario@xmov.com.br", "senha": "senha"},
+)
+
+# A sessão reutiliza o cookie auth-token automaticamente
+r = s.get("https://chamados.xmov.com.br/api/chamados")
+print(r.json())
+```
+
+### Postman / Insomnia
+
+1. Faça a requisição `POST /api/auth/login`.
+2. O Postman armazena o cookie `auth-token` automaticamente para o domínio.
+3. As próximas requisições para o mesmo host reutilizam o cookie sem configuração extra.
+4. Para inspecionar/limpar: aba **Cookies** (abaixo do botão Send).
+
+### Por que não tem `Authorization: Bearer`?
+
+O cookie é **HTTPOnly**, ou seja, **não pode ser lido por JavaScript no navegador**. Isso protege o token contra roubo via XSS. Como consequência, você **não consegue** (e não precisa) extrair o JWT para colocar manualmente em um header `Authorization`. Apenas reenvie o cookie.
 
 ---
 
@@ -158,13 +291,19 @@ openapi-generator-cli list
 ## 🔒 Segurança
 
 ### Autenticação
-A API usa **JWT via HTTPOnly Cookie**. Sempre inclua `credentials: 'include'` nas requisições:
+A API usa **JWT via HTTPOnly Cookie** chamado `auth-token` (validade de 8h, `SameSite=Lax`, `Secure` em produção).
+
+- **Não há header `Authorization: Bearer`.**
+- O cookie é setado automaticamente pelo `POST /api/auth/login`.
+- Em todas as requisições seguintes, basta reenviar o cookie (no navegador isso é automático com `credentials`).
 
 ```javascript
 fetch('/api/chamados', {
-  credentials: 'include'  // Importante!
+  credentials: 'include'  // Importante! Envia o cookie auth-token
 });
 ```
+
+Veja exemplos completos em cURL, Node.js, Python, Axios e Postman na seção [🔑 Usando o Token de Autenticação](#-usando-o-token-de-autenticação).
 
 ### Rate Limiting
 - **Login:** 5 tentativas por 15 minutos
@@ -214,7 +353,10 @@ Todas as respostas incluem headers de segurança:
 ## 🐛 Troubleshooting
 
 ### Erro 401 (Não autenticado)
-**Solução:** Inclua `credentials: 'include'` ou cookies nas requisições.
+**Causas comuns:**
+- Esqueceu de enviar o cookie `auth-token` (no navegador, faltou `credentials: 'include'`; no `curl`, faltou `-b cookies.txt`; em Node, faltou repassar o header `Cookie`).
+- O cookie expirou (validade de 8 horas) — refaça login.
+- Tentou usar header `Authorization: Bearer ...` — a API ignora esse header, autenticação é só por cookie.
 
 ### Erro 429 (Rate Limited)
 **Solução:** Aguarde o tempo indicado no header `Retry-After`.
