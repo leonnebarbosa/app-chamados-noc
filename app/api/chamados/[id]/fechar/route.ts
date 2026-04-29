@@ -43,13 +43,42 @@ export async function POST(
       return NextResponse.json({ error: "Chamado já está fechado" }, { status: 400 })
     }
 
+    const dataResolucaoDate = new Date(dataResolucao)
+
+    if (dataResolucaoDate.getTime() < chamadoAtual.dataDeteccao.getTime()) {
+      return NextResponse.json(
+        {
+          error:
+            "A normalização do incidente não pode ser anterior ao início do incidente.",
+        },
+        { status: 400 }
+      )
+    }
+
+    // Bloqueia fechamento se ainda houver período de impacto em aberto
+    const periodoEmAberto = await prisma.periodoImpacto.findFirst({
+      where: { chamadoId: id, fim: null },
+      select: { id: true },
+    })
+
+    if (periodoEmAberto) {
+      return NextResponse.json(
+        {
+          error:
+            "Existe um período de impacto em aberto. Encerre o período antes de fechar o chamado.",
+          code: "PERIODO_IMPACTO_ABERTO",
+        },
+        { status: 400 }
+      )
+    }
+
     // Atualiza o chamado
     const chamado = await prisma.chamado.update({
       where: { id },
       data: {
         status: "fechado",
-        dataResolucao: new Date(dataResolucao),
-        dataNormalizacao: new Date(dataResolucao),
+        dataResolucao: dataResolucaoDate,
+        dataNormalizacao: dataResolucaoDate,
         dataFechamento: new Date(),
         fechadoPorId: usuario.userId,
       },

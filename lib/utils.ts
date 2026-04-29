@@ -80,19 +80,26 @@ export function getImpactoLabel(impacto: string): string {
   return labels[impacto] || impacto
 }
 
-export function calcularTempoAberto(dataAbertura: Date | string): string {
-  const abertura = typeof dataAbertura === "string" ? new Date(dataAbertura) : dataAbertura
-  const agora = new Date()
-  const diffMs = agora.getTime() - abertura.getTime()
-  
+export function calcularDuracao(
+  inicio: Date | string,
+  fim?: Date | string | null
+): string {
+  const dInicio = typeof inicio === "string" ? new Date(inicio) : inicio
+  const dFim = fim ? (typeof fim === "string" ? new Date(fim) : fim) : new Date()
+  const diffMs = Math.max(0, dFim.getTime() - dInicio.getTime())
+
   const horas = Math.floor(diffMs / (1000 * 60 * 60))
   const minutos = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
-  
+
   if (horas > 24) {
     const dias = Math.floor(horas / 24)
     return `${dias}d ${horas % 24}h`
   }
-  
+
   return `${horas}h${minutos.toString().padStart(2, "0")}m`
+}
+
+export function calcularTempoAberto(dataAbertura: Date | string): string {
+  return calcularDuracao(dataAbertura)
 }
 
